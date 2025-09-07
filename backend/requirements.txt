@@ -1,0 +1,75 @@
+# Core Django packages
+Django==4.2.7
+djangorestframework==3.14.0
+django-cors-headers==4.3.1
+
+# Authentication and Security
+djangorestframework-simplejwt==5.3.0
+django-oauth-toolkit==1.7.1
+cryptography==41.0.7
+
+# Database
+psycopg2-binary==2.9.9
+django-extensions==3.2.3
+
+# File handling and media
+Pillow==10.1.0
+django-storages==1.14.2
+boto3==1.29.7
+
+# API Documentation
+drf-spectacular==0.26.5
+drf-spectacular-sidecar==2023.10.1
+
+# Celery for background tasks
+celery==5.3.4
+redis==5.0.1
+django-celery-beat==2.5.0
+django-celery-results==2.5.1
+
+# Email and notifications
+# django-email-backend==0.4.0  # Package not available
+twilio==8.10.0
+
+# Currency and payments
+requests==2.31.0
+stripe==7.8.0
+
+# Data processing and analytics
+pandas==2.1.3
+numpy==1.25.2
+
+# Testing
+pytest==7.4.3
+pytest-django==4.7.0
+factory-boy==3.3.0
+coverage==7.3.2
+
+# Development tools
+django-debug-toolbar==4.2.0
+django-environ==0.11.2
+whitenoise==6.6.0
+
+# Monitoring and logging
+sentry-sdk==1.38.0
+
+# OCR for receipts
+pytesseract==0.3.10
+
+# Excel/CSV export
+openpyxl==3.1.2
+
+# Timezone handling
+pytz==2023.3
+
+# Model utilities
+django-model-utils==4.3.1
+
+# API rate limiting
+django-ratelimit==4.1.0
+
+# Caching
+django-redis==5.4.0
+
+# Background job monitoring
+flower==2.0.1
