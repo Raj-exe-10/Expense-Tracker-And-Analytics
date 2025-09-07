@@ -1185,5 +1185,6 @@ REACT_APP_SENTRY_DSN=https://xxx@sentry.io/xxx
 
 ---
 
-*Last Updated: January 2024*
+*Last Updated: September 2025*
+*Updated By: Harsh Singh*
 *Version: 1.0.0*

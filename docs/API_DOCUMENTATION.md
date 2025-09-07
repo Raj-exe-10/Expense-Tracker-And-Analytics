@@ -1828,5 +1828,6 @@ balances = client.groups.get_balances('grp_abc123')
 
 ---
 
-*Last Updated: January 2024*
+*Last Updated: September 2025*
+*Updated By: Harsh Singh*
 *API Version: 1.0.0*

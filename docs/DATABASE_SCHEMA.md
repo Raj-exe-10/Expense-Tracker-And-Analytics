@@ -1135,6 +1135,7 @@ WHERE cardinality(pg_blocking_pids(pid)) > 0;
 
 ---
 
-*Last Updated: January 2024*
+*Last Updated: September 2025*
+*Updated By: Harsh Singh*
 *Database Version: PostgreSQL 13.0*
 *Schema Version: 1.0.0*

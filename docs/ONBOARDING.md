@@ -929,7 +929,8 @@ Congratulations on completing the onboarding process! You're now ready to start 
 
 ---
 
-*Last Updated: January 2024*
+*Last Updated: September 2025*
+*Updated By: Harsh Singh*
 *Version: 1.0.0*
 
 **Need help?** Reach out on Slack #dev-help or contact your team lead.
