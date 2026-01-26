@@ -3,6 +3,7 @@ import { expensesAPI } from '../../services/api';
 
 interface Expense {
   id: string;
+  title?: string;
   description: string;
   amount: number;
   category?: {
@@ -14,7 +15,8 @@ interface Expense {
     code: string;
     symbol: string;
   };
-  date: string;
+  date?: string;
+  expense_date?: string;
   created_by?: {
     id: string;
     first_name: string;
@@ -31,12 +33,15 @@ interface Expense {
       last_name: string;
     };
     amount: number;
+    percentage?: number;
   }>;
   notes?: string;
   tags?: string[];
   receipt_image?: string;
   is_settled?: boolean;
   settled_at?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 interface ExpenseState {
@@ -75,6 +80,18 @@ export const fetchExpenses = createAsyncThunk(
       return response;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.detail || 'Failed to fetch expenses');
+    }
+  }
+);
+
+export const fetchExpenseById = createAsyncThunk(
+  'expenses/fetchExpenseById',
+  async (id: string, { rejectWithValue }) => {
+    try {
+      const response = await expensesAPI.getExpenseById(id);
+      return response;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Failed to fetch expense');
     }
   }
 );
@@ -157,6 +174,19 @@ const expenseSlice = createSlice({
         state.totalExpenses = action.payload.count || action.payload.length;
       })
       .addCase(fetchExpenses.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      })
+      // Fetch expense by ID
+      .addCase(fetchExpenseById.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchExpenseById.fulfilled, (state, action) => {
+        state.loading = false;
+        state.currentExpense = action.payload;
+      })
+      .addCase(fetchExpenseById.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
       })

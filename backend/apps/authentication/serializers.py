@@ -3,11 +3,36 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth import authenticate
 from django.core.exceptions import ValidationError
+from django.contrib.auth import get_user_model
 from .models import User, UserProfile, UserFriendship, EmailVerification
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
-    """Custom JWT token serializer with additional user data"""
+    """Custom JWT token serializer with additional user data - accepts email instead of username"""
+    
+    username_field = 'email'  # Use email instead of username for authentication
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Add email field while keeping username for parent validation
+        # The parent TokenObtainPairSerializer expects 'username' field
+        # We'll map email to username in to_internal_value
+        if 'username' in self.fields:
+            # Keep username field but make it optional/hidden
+            self.fields['username'].required = False
+            self.fields['username'].allow_blank = True
+            # Add email field
+            from rest_framework import serializers as drf_serializers
+            self.fields['email'] = drf_serializers.EmailField(required=True, label='Email')
+    
+    def to_internal_value(self, data):
+        # Map 'email' to 'username' for parent class validation
+        # The parent TokenObtainPairSerializer expects 'username' field
+        if isinstance(data, dict):
+            data = data.copy()
+            if 'email' in data and 'username' not in data:
+                data['username'] = data['email']
+        return super().to_internal_value(data)
     
     @classmethod
     def get_token(cls, user):
@@ -24,23 +49,97 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         return token
 
     def validate(self, attrs):
-        data = super().validate(attrs)
+        # Get email from attrs (either from 'email' field or 'username' if mapped)
+        email = attrs.get('email') or attrs.get('username', '')
+        password = attrs.get('password', '')
+        
+        if not email or not password:
+            # Return a non-field error (as a list) to avoid field-specific error formatting
+            raise serializers.ValidationError(
+                ['Email and password are required.'],
+                code='required'
+            )
+        
+        # Since USERNAME_FIELD is 'email', authenticate with email as username
+        User = get_user_model()
+        user = None
+        
+        try:
+            # Get user by email first
+            user_obj = User.objects.get(email=email)
+            
+            # Authenticate - Django's authenticate uses USERNAME_FIELD which is 'email'
+            # So we pass email as the username parameter
+            user = authenticate(
+                request=self.context.get('request'),
+                username=email,  # This works because USERNAME_FIELD is 'email'
+                password=password
+            )
+            
+            # If authenticate returns None, check password manually
+            if user is None:
+                if user_obj.check_password(password):
+                    if not user_obj.is_active:
+                        raise serializers.ValidationError(
+                            ['User account is disabled. Please contact support.'],
+                            code='account_disabled'
+                        )
+                    user = user_obj
+                else:
+                    raise serializers.ValidationError(
+                        ['Invalid email or password. Please check your credentials and try again.'],
+                        code='invalid_credentials'
+                    )
+        except User.DoesNotExist:
+            raise serializers.ValidationError(
+                ['No account found with this email address. Please check your email or sign up.'],
+                code='user_not_found'
+            )
+        except serializers.ValidationError:
+            raise  # Re-raise validation errors
+        except Exception as e:
+            raise serializers.ValidationError(
+                ['Authentication failed. Please try again. If the problem persists, contact support.'],
+                code='authentication_error'
+            )
+        
+        if user is None:
+            raise serializers.ValidationError(
+                ['Invalid email or password. Please check your credentials and try again.'],
+                code='invalid_credentials'
+            )
+        
+        if not user.is_active:
+            raise serializers.ValidationError(
+                ['User account is disabled. Please contact support.'],
+                code='account_disabled'
+            )
+        
+        # Get token
+        refresh = self.get_token(user)
+        
+        data = {
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+        }
         
         # Add user data to response
         data['user'] = {
-            'id': self.user.id,
-            'email': self.user.email,
-            'username': self.user.username,
-            'first_name': self.user.first_name,
-            'last_name': self.user.last_name,
-            'role': self.user.role,
-            'is_verified': self.user.is_verified,
-            'is_premium': self.user.is_premium,
-            'preferred_currency': self.user.preferred_currency,
-            'timezone': self.user.timezone,
-            'avatar': self.user.avatar.url if self.user.avatar else None,
+            'id': user.id,
+            'email': user.email,
+            'username': user.username,
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+            'full_name': user.get_full_name(),
+            'role': user.role,
+            'is_verified': user.is_verified,
+            'is_premium': user.is_premium,
+            'preferred_currency': user.preferred_currency or 'USD',
+            'timezone': user.timezone or 'UTC',
+            'avatar': user.avatar.url if hasattr(user, 'avatar') and user.avatar else None,
         }
         
+        self.user = user
         return data
 
 
@@ -76,20 +175,22 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         return attrs
     
     def validate_email(self, value):
-        if User.objects.filter(email__iexact=value).exists():
-            raise serializers.ValidationError("User with this email already exists.")
-        return value.lower()
+        if value and User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError("An account with this email already exists.")
+        return value.lower() if value else value
     
     def validate_username(self, value):
-        if User.objects.filter(username__iexact=value).exists():
-            raise serializers.ValidationError("Username already taken.")
-        return value.lower()
+        if value and User.objects.filter(username__iexact=value).exists():
+            raise serializers.ValidationError("This username is already taken. Please choose a different username.")
+        return value.lower() if value else value
     
     def create(self, validated_data):
         password = validated_data.pop('password')
-        user = User.objects.create_user(**validated_data)
-        user.set_password(password)
-        user.save()
+        # Create user with password (create_user handles password hashing)
+        user = User.objects.create_user(
+            password=password,
+            **validated_data
+        )
         
         # Create user profile
         UserProfile.objects.create(user=user)

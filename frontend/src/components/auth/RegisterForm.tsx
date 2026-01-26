@@ -28,7 +28,7 @@ import {
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { AppDispatch, RootState } from '../../store';
-import { registerUser } from '../../store/slices/authSlice';
+import { registerUser, clearError } from '../../store/slices/authSlice';
 
 interface RegisterFormProps {
   onSwitchToLogin?: () => void;
@@ -152,12 +152,17 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchToLogin }) =
         password_confirm: formData.confirmPassword,
       })).unwrap();
       
-      // Redirect to email verification page or dashboard
-      navigate('/verify-email', { 
-        state: { email: formData.email.trim() } 
+      // Show success message and redirect to login
+      // Registration successful - user can now login
+      navigate('/login', { 
+        state: { 
+          message: 'Registration successful! Please login with your credentials.',
+          email: formData.email.trim() 
+        } 
       });
-    } catch (error) {
-      // Error is handled by the slice
+    } catch (error: any) {
+      // Error is already handled by the slice and displayed in the error state
+      // Log for debugging
       console.error('Registration failed:', error);
     }
   };
@@ -183,8 +188,12 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchToLogin }) =
         </Box>
 
         {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {typeof error === 'string' ? error : 'Registration failed. Please try again.'}
+          <Alert severity="error" sx={{ mb: 2 }} onClose={() => dispatch(clearError())}>
+            {typeof error === 'string' 
+              ? error 
+              : (typeof error === 'object' && error !== null 
+                  ? (error.detail || error.message || 'Registration failed. Please try again.')
+                  : 'Registration failed. Please try again.')}
           </Alert>
         )}
 

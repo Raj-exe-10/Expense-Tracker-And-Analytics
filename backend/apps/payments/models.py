@@ -201,9 +201,17 @@ class Settlement(UUIDModel, TimeStampedModel):
         self.save()
         
         # Mark related expense shares as settled
-        self.expense_shares.update(
+        # Find expense shares related to this settlement (payer and payee)
+        from apps.expenses.models import ExpenseShare
+        ExpenseShare.objects.filter(
+            expense__group=self.group if self.group else None,
+            user=self.payee,
+            paid_by=self.payer,
+            is_settled=False
+        ).update(
             is_settled=True,
-            settled_at=timezone.now()
+            settled_at=timezone.now(),
+            settlement=self
         )
 
 

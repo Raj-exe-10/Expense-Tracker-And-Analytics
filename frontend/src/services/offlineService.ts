@@ -1,5 +1,6 @@
 // Offline Service for managing offline functionality
 import { store } from '../store';
+import { tokenStorage } from '../utils/storage';
 
 class OfflineService {
   private db: IDBDatabase | null = null;
@@ -139,7 +140,7 @@ class OfflineService {
     const data = {
       ...expenseData,
       timestamp: Date.now(),
-      token: localStorage.getItem('access_token')
+      token: tokenStorage.getAccessToken()
     };
     
     return new Promise((resolve, reject) => {
@@ -353,7 +354,7 @@ class OfflineService {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+        'Authorization': `Bearer ${tokenStorage.getAccessToken()}`
       },
       body: JSON.stringify(action.data)
     });
@@ -369,7 +370,7 @@ class OfflineService {
     const response = await fetch(`/api/expenses/expenses/${action.id}/`, {
       method: 'DELETE',
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+        'Authorization': `Bearer ${tokenStorage.getAccessToken()}`
       }
     });
     
@@ -383,7 +384,7 @@ class OfflineService {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+        'Authorization': `Bearer ${tokenStorage.getAccessToken()}`
       },
       body: JSON.stringify(action.data)
     });

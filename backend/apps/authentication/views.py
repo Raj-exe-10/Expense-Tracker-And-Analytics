@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.throttling import AnonRateThrottle
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
@@ -29,34 +30,130 @@ from .serializers import (
 from apps.core.models import ActivityLog
 
 
+class LoginRateThrottle(AnonRateThrottle):
+    """Rate limiting for login endpoint - 5 attempts per minute"""
+    rate = '5/minute'
+
+
 class CustomTokenObtainPairView(TokenObtainPairView):
     """Custom JWT token view with enhanced user data"""
     serializer_class = CustomTokenObtainPairSerializer
+    throttle_classes = [LoginRateThrottle]
     
     def post(self, request, *args, **kwargs):
-        response = super().post(request, *args, **kwargs)
-        
-        if response.status_code == 200:
-            # Log successful login
+        # Check for account lockout before attempting login
+        email = request.data.get('email') or request.data.get('username')
+        if email:
             try:
-                user = User.objects.get(email=request.data.get('email'))
-                ActivityLog.objects.create(
-                    user=user,
-                    action='login',
-                    object_repr=f"Login from {request.META.get('REMOTE_ADDR')}",
-                    ip_address=request.META.get('REMOTE_ADDR'),
-                    user_agent=request.META.get('HTTP_USER_AGENT', '')
-                )
-                
-                # Update last login IP
-                user.last_login_ip = request.META.get('REMOTE_ADDR')
-                user.failed_login_attempts = 0  # Reset failed attempts
-                user.save(update_fields=['last_login_ip', 'failed_login_attempts'])
-                
+                user = User.objects.get(email=email)
+                if user.account_locked_until and user.account_locked_until > timezone.now():
+                    return Response(
+                        {'detail': f'Account locked until {user.account_locked_until}. Please try again later.'},
+                        status=status.HTTP_423_LOCKED
+                    )
             except User.DoesNotExist:
                 pass
         
-        return response
+        try:
+            # Call parent's post method which handles serialization
+            response = super().post(request, *args, **kwargs)
+            
+            if response.status_code == 200:
+                # Log successful login
+                try:
+                    email = request.data.get('email') or request.data.get('username')
+                    if email:
+                        user = User.objects.get(email=email)
+                        ActivityLog.objects.create(
+                            user=user,
+                            action='login',
+                            object_repr=f"Login from {request.META.get('REMOTE_ADDR')}",
+                            ip_address=request.META.get('REMOTE_ADDR'),
+                            user_agent=request.META.get('HTTP_USER_AGENT', '')
+                        )
+                        
+                        # Update last login IP and reset failed attempts
+                        user.last_login_ip = request.META.get('REMOTE_ADDR')
+                        user.failed_login_attempts = 0
+                        user.account_locked_until = None
+                        user.save(update_fields=['last_login_ip', 'failed_login_attempts', 'account_locked_until'])
+                except User.DoesNotExist:
+                    pass
+            else:
+                # Increment failed attempts on failed login
+                email = request.data.get('email') or request.data.get('username')
+                if email:
+                    try:
+                        user = User.objects.get(email=email)
+                        user.failed_login_attempts += 1
+                        
+                        # Lock account after 5 failed attempts for 15 minutes
+                        if user.failed_login_attempts >= 5:
+                            user.account_locked_until = timezone.now() + timedelta(minutes=15)
+                        
+                        user.save(update_fields=['failed_login_attempts', 'account_locked_until'])
+                    except User.DoesNotExist:
+                        pass
+            
+            return response
+        except Exception as e:
+            # Return proper error response with detail field
+            from rest_framework import status
+            from rest_framework.response import Response
+            from rest_framework.serializers import ValidationError as SerializerValidationError
+            import traceback
+            
+            # Log the error for debugging
+            import traceback
+            print(f"Login error: {type(e).__name__}: {str(e)}")
+            if hasattr(e, 'detail'):
+                print(f"Error detail: {e.detail}")
+            print(f"Traceback: {traceback.format_exc()}")
+            
+            # Extract error message from exception
+            error_message = 'Invalid email or password. Please check your credentials and try again.'
+            
+            if isinstance(e, SerializerValidationError):
+                error_detail = e.detail
+                if isinstance(error_detail, list):
+                    error_message = '; '.join(str(msg) for msg in error_detail)
+                elif isinstance(error_detail, dict):
+                    # Handle field errors - filter out 'username' errors since we use 'email'
+                    error_messages = []
+                    for field, errors in error_detail.items():
+                        # Skip 'username' field errors as we use email for authentication
+                        if field == 'username':
+                            continue
+                        if isinstance(errors, list):
+                            error_messages.extend([str(err) for err in errors])
+                        else:
+                            error_messages.append(str(errors))
+                    # If no other errors, provide a generic message
+                    error_message = '; '.join(error_messages) if error_messages else error_message
+                else:
+                    error_message = str(error_detail)
+            elif hasattr(e, 'detail'):
+                if isinstance(e.detail, list):
+                    error_message = '; '.join(str(msg) for msg in e.detail)
+                elif isinstance(e.detail, dict):
+                    error_messages = []
+                    for field, errors in e.detail.items():
+                        if field == 'username':
+                            continue
+                        if isinstance(errors, list):
+                            error_messages.extend([str(err) for err in errors])
+                        else:
+                            error_messages.append(str(errors))
+                    error_message = '; '.join(error_messages) if error_messages else error_message
+                else:
+                    error_message = str(e.detail)
+            else:
+                error_message = str(e) if str(e) else error_message
+            
+            return Response(
+                {'detail': error_message, 'message': error_message},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 
 class RegisterView(generics.CreateAPIView):
@@ -70,26 +167,74 @@ class RegisterView(generics.CreateAPIView):
         description="Create a new user account with email verification",
     )
     def post(self, request, *args, **kwargs):
-        response = super().post(request, *args, **kwargs)
-        
-        if response.status_code == 201:
-            user = User.objects.get(email=response.data['email'])
+        try:
+            response = super().post(request, *args, **kwargs)
             
-            # Send welcome email verification
-            self.send_verification_email(user)
+            if response.status_code == 201:
+                user = User.objects.get(email=response.data['email'])
+                
+                # Send welcome email verification
+                self.send_verification_email(user)
+                
+                # Log registration
+                ActivityLog.objects.create(
+                    user=user,
+                    action='create',
+                    object_repr=f"User registration: {user.email}",
+                    ip_address=request.META.get('REMOTE_ADDR'),
+                    user_agent=request.META.get('HTTP_USER_AGENT', '')
+                )
+                
+                response.data['message'] = 'Registration successful! You can now login with your credentials.'
             
-            # Log registration
-            ActivityLog.objects.create(
-                user=user,
-                action='create',
-                object_repr=f"User registration: {user.email}",
-                ip_address=request.META.get('REMOTE_ADDR'),
-                user_agent=request.META.get('HTTP_USER_AGENT', '')
+            return response
+        except Exception as e:
+            from rest_framework import status
+            from rest_framework.response import Response
+            from rest_framework.serializers import ValidationError as SerializerValidationError
+            
+            # Handle serializer validation errors
+            if isinstance(e, SerializerValidationError):
+                error_detail = e.detail
+                if isinstance(error_detail, dict):
+                    # Extract meaningful error messages, prioritizing email over username
+                    error_messages = []
+                    if 'email' in error_detail:
+                        if isinstance(error_detail['email'], list):
+                            error_messages.extend(error_detail['email'])
+                        else:
+                            error_messages.append(str(error_detail['email']))
+                    if 'username' in error_detail and 'email' not in error_detail:
+                        # Only show username error if email error is not present
+                        if isinstance(error_detail['username'], list):
+                            error_messages.extend(error_detail['username'])
+                        else:
+                            error_messages.append(str(error_detail['username']))
+                    # Add other field errors
+                    for field, errors in error_detail.items():
+                        if field not in ['email', 'username']:
+                            if isinstance(errors, list):
+                                error_messages.extend([str(err) for err in errors])
+                            else:
+                                error_messages.append(str(errors))
+                    
+                    error_message = '; '.join(error_messages) if error_messages else 'Registration failed. Please check your information.'
+                elif isinstance(error_detail, list):
+                    error_message = '; '.join(str(msg) for msg in error_detail)
+                else:
+                    error_message = str(error_detail)
+            else:
+                # Handle other exceptions
+                error_message = str(e)
+                if 'email' in error_message.lower() and 'already exists' in error_message.lower():
+                    error_message = 'An account with this email already exists.'
+                elif 'username' in error_message.lower() and 'already' in error_message.lower():
+                    error_message = 'This username is already taken. Please choose a different username.'
+            
+            return Response(
+                {'detail': error_message, 'message': error_message},
+                status=status.HTTP_400_BAD_REQUEST
             )
-            
-            response.data['message'] = 'Registration successful! Please check your email for verification.'
-        
-        return response
     
     def send_verification_email(self, user):
         """Send email verification"""
@@ -108,7 +253,9 @@ class RegisterView(generics.CreateAPIView):
         subject = "Verify your email - Expense Tracker"
         message = render_to_string('emails/email_verification.html', {
             'user': user,
-            'verification_url': verification_url
+            'verification_url': verification_url,
+            'verification_link': verification_url,
+            'verification_code': token[:8]  # First 8 characters for display
         })
         
         # Send email (implement based on your email backend)

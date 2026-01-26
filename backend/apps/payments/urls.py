@@ -3,15 +3,12 @@ from rest_framework.routers import DefaultRouter
 from . import views
 
 router = DefaultRouter()
-# router.register(r'settlements', views.SettlementViewSet)
-# router.register(r'payment-methods', views.PaymentMethodViewSet)
+router.register(r'settlements', views.SettlementViewSet, basename='settlement')
+router.register(r'payment-methods', views.PaymentMethodViewSet, basename='payment-method')
 
 urlpatterns = [
-    # Payment endpoints
-    # path('settle/', views.CreateSettlementView.as_view(), name='create_settlement'),
-    # path('payments/stripe/webhook/', views.StripeWebhookView.as_view(), name='stripe_webhook'),
-    # path('payments/paypal/webhook/', views.PayPalWebhookView.as_view(), name='paypal_webhook'),
-    
-    # Router URLs
+    path('balances/', views.user_balances, name='user_balances'),
+    path('groups/<uuid:group_id>/balances/', views.group_balances, name='group_balances'),
+    path('settle/', views.create_settlement, name='create_settlement'),
     path('', include(router.urls)),
 ]

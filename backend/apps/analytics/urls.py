@@ -1,17 +1,10 @@
-from django.urls import path, include
-from rest_framework.routers import DefaultRouter
+from django.urls import path
 from . import views
 
-router = DefaultRouter()
-
 urlpatterns = [
-    # Analytics endpoints
-    # path('dashboard/', views.DashboardAnalyticsView.as_view(), name='dashboard_analytics'),
-    # path('expenses/trends/', views.ExpenseTrendsView.as_view(), name='expense_trends'),
-    # path('groups/<uuid:pk>/analytics/', views.GroupAnalyticsView.as_view(), name='group_analytics'),
-    # path('export/csv/', views.ExportCSVView.as_view(), name='export_csv'),
-    # path('export/pdf/', views.ExportPDFView.as_view(), name='export_pdf'),
-    
-    # Router URLs
-    path('', include(router.urls)),
+    path('dashboard/', views.dashboard_stats, name='dashboard_analytics'),
+    path('expenses/trends/', views.expense_trends, name='expense_trends'),
+    path('categories/breakdown/', views.category_breakdown, name='category_breakdown'),
+    path('groups/<uuid:group_id>/analytics/', views.group_analytics, name='group_analytics'),
+    path('export/<str:format>/', views.export_data, name='export_data'),
 ]

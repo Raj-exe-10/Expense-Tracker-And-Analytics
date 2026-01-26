@@ -2,18 +2,29 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { analyticsAPI } from '../../services/api';
 
 interface CategoryBreakdown {
-  category: {
+  category_id?: string;
+  category_name?: string;
+  category?: {
     id: string;
     name: string;
   };
-  total_amount: number;
+  amount?: number;
+  value?: number;
+  total_amount?: number;
+  count?: number;
   percentage: number;
+  color?: string;
+  icon?: string;
 }
 
 interface MonthlyTrend {
-  month: string;
-  total_amount: number;
-  expense_count: number;
+  month?: string;
+  date?: string;
+  expense_date?: string;
+  total_amount?: number;
+  amount?: number;
+  expense_count?: number;
+  count?: number;
 }
 
 interface AnalyticsSummary {
@@ -22,6 +33,7 @@ interface AnalyticsSummary {
   average_expense: number;
   most_expensive_category: string;
   most_frequent_category: string;
+  change_percentage?: number;
   period: {
     start_date: string;
     end_date: string;
@@ -112,7 +124,24 @@ export const exportReport = createAsyncThunk(
     try {
       const { format, ...restParams } = params;
       const response = await analyticsAPI.exportData(format, restParams);
-      return response;
+      
+      // response should be a Blob for file downloads
+      if (response instanceof Blob) {
+        const url = window.URL.createObjectURL(response);
+        const link = document.createElement('a');
+        link.href = url;
+        const dateStr = params.startDate && params.endDate 
+          ? `${params.startDate}_${params.endDate}`
+          : new Date().toISOString().split('T')[0];
+        link.download = `expenses_export_${dateStr}.${format}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        return { success: true, format, message: 'Export downloaded successfully' };
+      }
+      
+      return { success: true, data: response };
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.detail || 'Failed to export report');
     }
@@ -145,7 +174,15 @@ const analyticsSlice = createSlice({
       })
       .addCase(fetchAnalyticsSummary.fulfilled, (state, action) => {
         state.loading = false;
-        state.summary = action.payload;
+        // Backend returns the data directly, not nested
+        state.summary = {
+          total_expenses: action.payload.total_expenses || 0,
+          expense_count: action.payload.expense_count || 0,
+          average_expense: action.payload.average_expense || 0,
+          most_expensive_category: action.payload.category_breakdown?.[0]?.category__name || '',
+          most_frequent_category: action.payload.category_breakdown?.[0]?.category__name || '',
+          period: action.payload.period || { start_date: '', end_date: '' }
+        };
       })
       .addCase(fetchAnalyticsSummary.rejected, (state, action) => {
         state.loading = false;
@@ -153,11 +190,13 @@ const analyticsSlice = createSlice({
       })
       // Fetch category breakdown
       .addCase(fetchCategoryBreakdown.fulfilled, (state, action) => {
-        state.categoryBreakdown = action.payload;
+        // Backend returns { breakdown: [...], total: ..., period: {...} }
+        state.categoryBreakdown = action.payload.breakdown || action.payload || [];
       })
       // Fetch monthly trends
       .addCase(fetchMonthlyTrends.fulfilled, (state, action) => {
-        state.monthlyTrends = action.payload;
+        // Backend returns { trends: [...], period: {...} }
+        state.monthlyTrends = action.payload.trends || action.payload || [];
       })
       // Export report
       .addCase(exportReport.fulfilled, (state, action) => {

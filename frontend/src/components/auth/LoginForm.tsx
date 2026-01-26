@@ -22,9 +22,9 @@ import {
   Facebook,
 } from '@mui/icons-material';
 import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { useNavigate, Link as RouterLink, useLocation } from 'react-router-dom';
 import { AppDispatch, RootState } from '../../store';
-import { loginUser } from '../../store/slices/authSlice';
+import { loginUser, clearError } from '../../store/slices/authSlice';
 
 interface LoginFormProps {
   onSwitchToRegister?: () => void;
@@ -40,7 +40,12 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister }) => {
 
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
+  const routerLocation = useLocation();
   const { isLoading: loading, error } = useSelector((state: RootState) => state.auth);
+  
+  // Get success message from navigation state
+  const locationState = routerLocation.state as { message?: string; email?: string } | null;
+  const successMessage = locationState?.message;
 
   const handleChange = (field: string) => (event: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({
@@ -83,8 +88,9 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister }) => {
       
       // Redirect to dashboard on successful login
       navigate('/dashboard');
-    } catch (error) {
-      // Error is handled by the slice
+    } catch (error: any) {
+      // Error is already handled by the slice and displayed in the error state
+      // Log for debugging
       console.error('Login failed:', error);
     }
   };
@@ -106,9 +112,19 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister }) => {
           </Typography>
         </Box>
 
+        {successMessage && (
+          <Alert severity="success" sx={{ mb: 2 }}>
+            {successMessage}
+          </Alert>
+        )}
+
         {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {typeof error === 'string' ? error : 'Login failed. Please try again.'}
+          <Alert severity="error" sx={{ mb: 2 }} onClose={() => dispatch(clearError())}>
+            {typeof error === 'string' 
+              ? error 
+              : (typeof error === 'object' && error !== null 
+                  ? (error.detail || error.message || 'Login failed. Please check your credentials.')
+                  : 'Login failed. Please check your credentials.')}
           </Alert>
         )}
 

@@ -20,6 +20,8 @@ import {
   Avatar,
   IconButton,
   Tooltip,
+  Snackbar,
+  Alert,
 } from '@mui/material';
 import {
   TrendingUp,
@@ -65,10 +67,13 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D'
 const Analytics: React.FC = () => {
   const dispatch = useAppDispatch();
   const { summary, categoryBreakdown, monthlyTrends, loading } = useAppSelector((state) => state.analytics);
+  const { groups } = useAppSelector((state) => state.groups);
   
   const [dateRange, setDateRange] = useState('30');
   const [groupFilter, setGroupFilter] = useState('all');
   const [viewType, setViewType] = useState<'overview' | 'detailed' | 'comparison'>('overview');
+  const [exportSuccess, setExportSuccess] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
   
   useEffect(() => {
     loadAnalyticsData();
@@ -89,34 +94,40 @@ const Analytics: React.FC = () => {
     dispatch(fetchMonthlyTrends(params));
   };
   
-  const handleExport = (exportFormat: 'csv' | 'pdf') => {
-    dispatch(exportReport({
+  const handleExport = async (exportFormat: 'csv' | 'pdf') => {
+    setExportError(null);
+    const result = await dispatch(exportReport({
       format: exportFormat,
       startDate: format(subDays(new Date(), parseInt(dateRange)), 'yyyy-MM-dd'),
       endDate: format(new Date(), 'yyyy-MM-dd'),
       groupId: groupFilter !== 'all' ? groupFilter : undefined,
     }));
+    
+    if (exportReport.fulfilled.match(result)) {
+      setExportSuccess(`${exportFormat.toUpperCase()} export downloaded successfully!`);
+      setTimeout(() => setExportSuccess(null), 3000);
+    } else if (exportReport.rejected.match(result)) {
+      setExportError(result.payload as string || 'Failed to export report');
+      setTimeout(() => setExportError(null), 5000);
+    }
   };
   
-  // Mock data for demonstration
-  const expenseTrendData = [
-    { date: '2024-01-01', amount: 1200, count: 15 },
-    { date: '2024-01-02', amount: 980, count: 12 },
-    { date: '2024-01-03', amount: 1500, count: 18 },
-    { date: '2024-01-04', amount: 1100, count: 14 },
-    { date: '2024-01-05', amount: 1350, count: 16 },
-    { date: '2024-01-06', amount: 900, count: 11 },
-    { date: '2024-01-07', amount: 1600, count: 20 },
-  ];
+  // Use real data from Redux store, fallback to empty arrays if not loaded
+  const expenseTrendData = monthlyTrends.length > 0 
+    ? monthlyTrends.map(trend => ({
+        date: trend.month || trend.date || '',
+        amount: trend.total_amount || trend.amount || 0,
+        count: trend.expense_count || trend.count || 0,
+      }))
+    : [];
   
-  const categoryData = [
-    { name: 'Food & Dining', value: 3500, percentage: 35 },
-    { name: 'Transportation', value: 2000, percentage: 20 },
-    { name: 'Entertainment', value: 1500, percentage: 15 },
-    { name: 'Shopping', value: 1200, percentage: 12 },
-    { name: 'Bills', value: 1000, percentage: 10 },
-    { name: 'Healthcare', value: 800, percentage: 8 },
-  ];
+  const categoryData = categoryBreakdown.length > 0
+    ? categoryBreakdown.map(cat => ({
+        name: cat.category_name || cat.category?.name || 'Other',
+        value: cat.amount || cat.total_amount || 0,
+        percentage: cat.percentage || 0,
+      }))
+    : [];
   
   const monthlyComparisonData = [
     { month: 'Jan', thisYear: 4500, lastYear: 3800 },
@@ -201,6 +212,29 @@ const Analytics: React.FC = () => {
   
   return (
     <Box>
+      {/* Success/Error Messages */}
+      <Snackbar
+        open={!!exportSuccess}
+        autoHideDuration={3000}
+        onClose={() => setExportSuccess(null)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <Alert onClose={() => setExportSuccess(null)} severity="success" sx={{ width: '100%' }}>
+          {exportSuccess}
+        </Alert>
+      </Snackbar>
+      
+      <Snackbar
+        open={!!exportError}
+        autoHideDuration={5000}
+        onClose={() => setExportError(null)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <Alert onClose={() => setExportError(null)} severity="error" sx={{ width: '100%' }}>
+          {exportError}
+        </Alert>
+      </Snackbar>
+      
       {/* Header */}
       <Box mb={3}>
         <Typography variant="h4" gutterBottom>
@@ -237,9 +271,11 @@ const Analytics: React.FC = () => {
               onChange={(e) => setGroupFilter(e.target.value)}
             >
               <MenuItem value="all">All Groups</MenuItem>
-              <MenuItem value="1">Roommates</MenuItem>
-              <MenuItem value="2">Weekend Trip</MenuItem>
-              <MenuItem value="3">Office Lunch</MenuItem>
+              {groups.map((group) => (
+                <MenuItem key={group.id} value={group.id}>
+                  {group.name}
+                </MenuItem>
+              ))}
             </Select>
           </FormControl>
           
@@ -290,17 +326,17 @@ const Analytics: React.FC = () => {
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
             title="Total Expenses"
-            value="$4,325.50"
-            change={12}
+            value={`$${summary?.total_expenses?.toFixed(2) || '0.00'}`}
+            change={summary?.change_percentage ? Math.round(summary.change_percentage) : 0}
             icon={<AttachMoney />}
             color="primary.main"
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
-            title="Average Daily"
-            value="$144.18"
-            change={-5}
+            title="Average Expense"
+            value={`$${summary?.average_expense?.toFixed(2) || '0.00'}`}
+            change={summary?.change_percentage ? Math.round(summary.change_percentage) : 0}
             icon={<Assessment />}
             color="success.main"
           />
@@ -308,7 +344,7 @@ const Analytics: React.FC = () => {
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
             title="Most Spent Category"
-            value="Food & Dining"
+            value={summary?.most_expensive_category || categoryBreakdown[0]?.category_name || 'N/A'}
             icon={<Category />}
             color="warning.main"
           />
@@ -316,8 +352,8 @@ const Analytics: React.FC = () => {
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
             title="Expense Count"
-            value="87"
-            change={8}
+            value={summary?.expense_count?.toString() || '0'}
+            change={summary?.change_percentage ? Math.round(summary.change_percentage) : 0}
             icon={<BarChartIcon />}
             color="info.main"
           />
@@ -549,7 +585,8 @@ const Analytics: React.FC = () => {
                 </Typography>
                 <List>
                   {categoryData.map((category, index) => {
-                    const change = Math.random() * 40 - 20; // Mock change data
+                    // Use percentage change from summary if available, otherwise show 0
+                    const change = summary?.change_percentage ? Math.round(summary.change_percentage) : 0;
                     return (
                       <ListItem key={category.name}>
                         <ListItemAvatar>

@@ -104,7 +104,14 @@ const coreSlice = createSlice({
       })
       .addCase(fetchCategories.fulfilled, (state, action) => {
         state.loading = false;
-        state.categories = action.payload;
+        // Handle both array response and paginated response
+        if (Array.isArray(action.payload)) {
+          state.categories = action.payload;
+        } else if (action.payload?.results && Array.isArray(action.payload.results)) {
+          state.categories = action.payload.results;
+        } else {
+          state.categories = [];
+        }
       })
       .addCase(fetchCategories.rejected, (state, action) => {
         state.loading = false;
@@ -117,7 +124,14 @@ const coreSlice = createSlice({
       })
       .addCase(fetchCurrencies.fulfilled, (state, action) => {
         state.loading = false;
-        state.currencies = action.payload;
+        // Handle both array response and paginated response
+        if (Array.isArray(action.payload)) {
+          state.currencies = action.payload;
+        } else if (action.payload?.results && Array.isArray(action.payload.results)) {
+          state.currencies = action.payload.results;
+        } else {
+          state.currencies = [];
+        }
       })
       .addCase(fetchCurrencies.rejected, (state, action) => {
         state.loading = false;

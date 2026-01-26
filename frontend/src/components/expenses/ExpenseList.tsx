@@ -46,6 +46,7 @@ import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { useAppSelector, useAppDispatch } from '../../hooks/redux';
 import { fetchExpenses, deleteExpense } from '../../store/slices/expenseSlice';
+import { formatAmount, toNumber } from '../../utils/formatting';
 
 interface ExpenseListProps {
   groupId?: string;
@@ -59,8 +60,11 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ groupId, currentGroupFilter, 
   const { expenses: storeExpenses, loading } = useAppSelector((state) => state.expenses);
   const { groups } = useAppSelector((state) => state.groups);
   
-  // Use expenses from props if provided, otherwise from store
-  const expenses = propsExpenses || storeExpenses || [];
+  // Use expenses from props if provided and not empty, otherwise from store
+  // If propsExpenses is explicitly undefined, use store expenses
+  const expenses = (propsExpenses !== undefined && propsExpenses !== null) 
+    ? propsExpenses 
+    : (storeExpenses || []);
   
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -148,10 +152,12 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ groupId, currentGroupFilter, 
     
     switch (sortBy) {
       case 'date':
-        compareValue = new Date(a.date).getTime() - new Date(b.date).getTime();
+        const dateA = a.date || a.expense_date;
+        const dateB = b.date || b.expense_date;
+        compareValue = new Date(dateA).getTime() - new Date(dateB).getTime();
         break;
       case 'amount':
-        compareValue = a.amount - b.amount;
+        compareValue = toNumber(a.amount) - toNumber(b.amount);
         break;
       case 'category':
         compareValue = a.category?.name.localeCompare(b.category?.name || '') || 0;
@@ -285,11 +291,11 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ groupId, currentGroupFilter, 
                   sx={{ cursor: 'pointer' }}
                 >
                   <TableCell>
-                    {format(new Date(expense.date), 'MMM dd, yyyy')}
+                    {format(new Date(expense.date || expense.expense_date), 'MMM dd, yyyy')}
                   </TableCell>
                   <TableCell>
                     <Box>
-                      <Typography variant="body2">{expense.description}</Typography>
+                      <Typography variant="body2">{expense.title || expense.description}</Typography>
                       {expense.notes && (
                         <Typography variant="caption" color="text.secondary">
                           {expense.notes}
@@ -308,7 +314,9 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ groupId, currentGroupFilter, 
                   </TableCell>
                   <TableCell>
                     <Typography variant="body2" fontWeight="bold">
-                      ${expense.amount.toFixed(2)}
+                      ${typeof expense.amount === 'number' 
+                        ? expense.amount.toFixed(2) 
+                        : parseFloat(expense.amount || '0').toFixed(2)}
                     </Typography>
                   </TableCell>
                   <TableCell>

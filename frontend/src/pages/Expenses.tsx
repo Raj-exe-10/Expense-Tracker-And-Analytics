@@ -6,14 +6,17 @@ import {
   Tabs,
   Tab,
   Fab,
+  Alert,
+  Snackbar,
 } from '@mui/material';
 import { Add } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
-import { useAppDispatch } from '../hooks/redux';
+import { useAppDispatch, useAppSelector } from '../hooks/redux';
 import { fetchExpenses, createExpense } from '../store/slices/expenseSlice';
 import ExpenseList from '../components/expenses/ExpenseList';
 import ExpenseForm from '../components/expenses/ExpenseForm';
+import RecurringExpensesList from '../components/expenses/RecurringExpensesList';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -41,9 +44,15 @@ const Expenses: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useAppDispatch();
-  const { expenses, groups, currentFilter, setCurrentFilter, addExpense } = useAppContext();
+  const { groups, currentFilter, setCurrentFilter, addExpense } = useAppContext();
+  const { expenses: storeExpenses } = useAppSelector((state) => state.expenses);
+  const { groups: storeGroups } = useAppSelector((state) => state.groups);
   const [tabValue, setTabValue] = useState(0);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Use groups from Redux store if available, otherwise from context
+  const groupsList = storeGroups.length > 0 ? storeGroups : groups;
 
   // Fetch expenses on component mount
   useEffect(() => {
@@ -78,33 +87,39 @@ const Expenses: React.FC = () => {
   };
 
   const handleExpenseAdded = async (expense: any) => {
-    // Dispatch to Redux store to create expense
-    await dispatch(createExpense(expense));
-    // Also update local context if needed
-    addExpense(expense);
-    setShowAddForm(false);
-    // Refresh expenses list
-    dispatch(fetchExpenses({}));
+    try {
+      // The expense is already created by the form, just refresh the list
+      setShowAddForm(false);
+      setSuccessMessage('Expense added successfully!');
+      // Refresh expenses list
+      dispatch(fetchExpenses({}));
+    } catch (error) {
+      console.error('Error handling expense addition:', error);
+    }
   };
 
-  // Filter expenses based on tab and current filter
+  // Filter expenses based on tab - ExpenseList will use Redux store expenses
   const getFilteredExpenses = () => {
-    let filtered = [...expenses];
+    if (!storeExpenses || storeExpenses.length === 0) {
+      return undefined; // Return undefined so ExpenseList uses storeExpenses directly
+    }
+    
+    let filtered = [...storeExpenses];
     
     if (tabValue === 1) {
       // Personal expenses (no group)
-      filtered = filtered.filter(e => !e.group_id);
+      filtered = filtered.filter(e => !e.group);
     } else if (tabValue === 2) {
       // Group expenses
-      filtered = filtered.filter(e => e.group_id);
+      filtered = filtered.filter(e => e.group);
       
       // Apply specific group filter if coming from groups page
       if (currentFilter.type === 'group' && currentFilter.value) {
-        filtered = filtered.filter(e => e.group_id === currentFilter.value);
+        filtered = filtered.filter(e => e.group?.id === currentFilter.value);
       }
     }
     
-    return filtered;
+    return filtered.length > 0 ? filtered : undefined;
   };
 
   if (showAddForm) {
@@ -119,7 +134,7 @@ const Expenses: React.FC = () => {
         <ExpenseForm 
           onClose={handleCloseForm} 
           onSuccess={handleExpenseAdded}
-          groups={groups}
+          groups={groupsList}
         />
       </Box>
     );
@@ -127,6 +142,17 @@ const Expenses: React.FC = () => {
 
   return (
     <Box>
+      <Snackbar
+        open={!!successMessage}
+        autoHideDuration={3000}
+        onClose={() => setSuccessMessage(null)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <Alert onClose={() => setSuccessMessage(null)} severity="success" sx={{ width: '100%' }}>
+          {successMessage}
+        </Alert>
+      </Snackbar>
+      
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4">Expenses</Typography>
         <Button
@@ -161,11 +187,7 @@ const Expenses: React.FC = () => {
         />
       </TabPanel>
       <TabPanel value={tabValue} index={3}>
-        <Box>
-          <Typography variant="h6" color="text.secondary" textAlign="center" py={4}>
-            Recurring expenses feature coming soon
-          </Typography>
-        </Box>
+        <RecurringExpensesList />
       </TabPanel>
 
       {/* Floating Action Button for mobile */}

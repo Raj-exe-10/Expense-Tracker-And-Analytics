@@ -1,4 +1,5 @@
 import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
+import { tokenStorage } from '../utils/storage';
 
 const BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
@@ -13,7 +14,7 @@ const api = axios.create({
 // Request interceptor to add auth token
 api.interceptors.request.use(
   (config: AxiosRequestConfig | any) => {
-    const token = localStorage.getItem('access_token');
+    const token = tokenStorage.getAccessToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -33,7 +34,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
-      const refreshToken = localStorage.getItem('refresh_token');
+      const refreshToken = tokenStorage.getRefreshToken();
       if (refreshToken) {
         try {
           const response = await axios.post(`${BASE_URL}/api/auth/token/refresh/`, {
@@ -41,15 +42,14 @@ api.interceptors.response.use(
           });
 
           const { access } = response.data;
-          localStorage.setItem('access_token', access);
+          tokenStorage.setAccessToken(access);
 
           // Retry original request with new token
           originalRequest.headers.Authorization = `Bearer ${access}`;
           return api(originalRequest);
         } catch (refreshError) {
           // Refresh failed, redirect to login
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('refresh_token');
+          tokenStorage.clearTokens();
           window.location.href = '/login';
           return Promise.reject(refreshError);
         }
@@ -88,6 +88,12 @@ export const authAPI = {
     new_password: string;
     new_password_confirm: string;
   }) => api.post('/auth/password/change/', data).then(res => res.data),
+  
+  requestPasswordReset: (data: { email: string }) =>
+    api.post('/auth/password/reset/', data).then(res => res.data),
+  
+  resetPassword: (data: { uid: string; token: string; new_password: string; new_password_confirm: string }) =>
+    api.post('/auth/password/reset/confirm/', data).then(res => res.data),
 };
 
 // Expenses API
@@ -95,8 +101,16 @@ export const expensesAPI = {
   getExpenses: (params?: any) =>
     api.get('/expenses/expenses/', { params }).then(res => res.data),
   
-  createExpense: (data: any) =>
-    api.post('/expenses/expenses/', data).then(res => res.data),
+  getExpenseById: (id: string) =>
+    api.get(`/expenses/expenses/${id}/`).then(res => res.data),
+  
+  createExpense: (data: any) => {
+    // If data is FormData, don't set Content-Type header (browser will set it with boundary)
+    const config = data instanceof FormData 
+      ? { headers: { 'Content-Type': 'multipart/form-data' } }
+      : {};
+    return api.post('/expenses/expenses/', data, config).then(res => res.data);
+  },
   
   updateExpense: (id: string, data: any) =>
     api.patch(`/expenses/expenses/${id}/`, data).then(res => res.data),
@@ -104,11 +118,39 @@ export const expensesAPI = {
   deleteExpense: (id: string) =>
     api.delete(`/expenses/expenses/${id}/`).then(res => res.data),
   
+  settleExpense: (id: string) =>
+    api.post(`/expenses/expenses/${id}/settle/`).then(res => res.data),
+  
   getExpenseComments: (expenseId: string) =>
     api.get(`/expenses/expenses/${expenseId}/comments/`).then(res => res.data),
   
   addExpenseComment: (expenseId: string, data: { comment: string }) =>
-    api.post(`/expenses/expenses/${expenseId}/comments/`, data).then(res => res.data),
+    api.post(`/expenses/expenses/${expenseId}/add_comment/`, data).then(res => res.data),
+  
+  // Recurring Expenses
+  getRecurringExpenses: (params?: any) =>
+    api.get('/expenses/recurring/', { params }).then(res => res.data),
+  
+  getRecurringExpenseById: (id: string) =>
+    api.get(`/expenses/recurring/${id}/`).then(res => res.data),
+  
+  createRecurringExpense: (data: any) =>
+    api.post('/expenses/recurring/', data).then(res => res.data),
+  
+  updateRecurringExpense: (id: string, data: any) =>
+    api.patch(`/expenses/recurring/${id}/`, data).then(res => res.data),
+  
+  deleteRecurringExpense: (id: string) =>
+    api.delete(`/expenses/recurring/${id}/`).then(res => res.data),
+  
+  pauseRecurringExpense: (id: string) =>
+    api.post(`/expenses/recurring/${id}/pause/`).then(res => res.data),
+  
+  resumeRecurringExpense: (id: string) =>
+    api.post(`/expenses/recurring/${id}/resume/`).then(res => res.data),
+  
+  createNextExpense: (id: string) =>
+    api.post(`/expenses/recurring/${id}/create_next_expense/`).then(res => res.data),
 };
 
 // Groups API
@@ -159,6 +201,60 @@ export const coreAPI = {
     api.get('/core/health/').then(res => res.data),
 };
 
+// Settlements API
+export const settlementsAPI = {
+  getSettlements: (params?: any) =>
+    api.get('/payments/settlements/', { params }).then(res => res.data),
+  
+  getSettlementById: (id: string) =>
+    api.get(`/payments/settlements/${id}/`).then(res => res.data),
+  
+  createSettlement: (data: any) =>
+    api.post('/payments/settle/', data).then(res => res.data),
+  
+  updateSettlement: (id: string, data: any) =>
+    api.patch(`/payments/settlements/${id}/`, data).then(res => res.data),
+  
+  confirmSettlement: (id: string) =>
+    api.post(`/payments/settlements/${id}/confirm/`).then(res => res.data),
+  
+  completeSettlement: (id: string) =>
+    api.post(`/payments/settlements/${id}/complete/`).then(res => res.data),
+  
+  getUserBalances: (params?: any) =>
+    api.get('/payments/balances/', { params }).then(res => res.data),
+  
+  getGroupBalances: (groupId: string) =>
+    api.get(`/payments/groups/${groupId}/balances/`).then(res => res.data),
+};
+
+// Notifications API
+export const notificationsAPI = {
+  getNotifications: (params?: any) =>
+    api.get('/notifications/notifications/', { params }).then(res => res.data),
+  
+  getNotificationById: (id: string) =>
+    api.get(`/notifications/notifications/${id}/`).then(res => res.data),
+  
+  markAsRead: (id: string) =>
+    api.post(`/notifications/notifications/${id}/mark_read/`).then(res => res.data),
+  
+  markAllAsRead: () =>
+    api.post('/notifications/notifications/mark_all_read/').then(res => res.data),
+  
+  getUnreadCount: () =>
+    api.get('/notifications/notifications/unread_count/').then(res => res.data),
+  
+  getPreferences: () =>
+    api.get('/notifications/preferences/').then(res => res.data),
+  
+  updatePreference: (id: string, data: any) =>
+    api.patch(`/notifications/preferences/${id}/`, data).then(res => res.data),
+  
+  createPreference: (data: any) =>
+    api.post('/notifications/preferences/', data).then(res => res.data),
+};
+
 // Analytics API
 export const analyticsAPI = {
   getDashboardStats: (params?: any) =>
@@ -173,11 +269,18 @@ export const analyticsAPI = {
   getGroupAnalytics: (groupId: string, params?: any) =>
     api.get(`/analytics/groups/${groupId}/analytics/`, { params }).then(res => res.data),
   
-  exportData: (format: 'csv' | 'pdf', params?: any) =>
-    api.get(`/analytics/export/${format}/`, { 
-      params,
-      responseType: 'blob'
-    }).then(res => res.data),
+  exportData: (format: 'csv' | 'pdf', params?: any) => {
+    const config: any = { params };
+    // Set responseType based on format
+    if (format === 'csv') {
+      config.responseType = 'blob';
+      config.headers = { 'Accept': 'text/csv' };
+    } else if (format === 'pdf') {
+      config.responseType = 'blob';
+      config.headers = { 'Accept': 'application/pdf' };
+    }
+    return api.get(`/analytics/export/${format}/`, config).then(res => res.data);
+  },
 };
 
 export default api;

@@ -3,6 +3,9 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
+from django.core.cache import cache
 from django.http import JsonResponse
 from django.db import connection
 from django.db.models import Q
@@ -52,6 +55,23 @@ class CurrencyViewSet(viewsets.ModelViewSet):
     queryset = Currency.objects.filter(is_active=True)
     serializer_class = CurrencySerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None  # Disable pagination for currencies list
+    
+    @method_decorator(cache_page(60 * 60))  # Cache for 1 hour
+    def list(self, request, *args, **kwargs):
+        """List currencies with caching"""
+        cache_key = 'currencies_active'
+        currencies = cache.get(cache_key)
+        
+        if currencies is None:
+            currencies = list(
+                Currency.objects.filter(is_active=True)
+                .order_by('code')
+                .values('id', 'code', 'name', 'symbol', 'decimal_places', 'exchange_rate_to_usd')
+            )
+            cache.set(cache_key, currencies, 60 * 60)  # Cache for 1 hour
+        
+        return Response(currencies)
     
     @action(detail=False, methods=['get'])
     def popular(self, request):
@@ -106,6 +126,23 @@ class CategoryViewSet(viewsets.ModelViewSet):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None  # Disable pagination for categories list
+    
+    @method_decorator(cache_page(60 * 60 * 24))  # Cache for 24 hours
+    def list(self, request, *args, **kwargs):
+        """List categories with caching"""
+        cache_key = 'categories_all'
+        categories = cache.get(cache_key)
+        
+        if categories is None:
+            categories = list(
+                Category.objects.all()
+                .order_by('name')
+                .values('id', 'name', 'slug', 'icon', 'color', 'is_default')
+            )
+            cache.set(cache_key, categories, 60 * 60 * 24)  # Cache for 24 hours
+        
+        return Response(categories)
     
     def get_queryset(self):
         queryset = super().get_queryset()

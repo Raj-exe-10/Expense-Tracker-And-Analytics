@@ -35,7 +35,10 @@ import {
   History,
   SwapHoriz,
 } from '@mui/icons-material';
-import { useAppSelector } from '../hooks/redux';
+import { useAppSelector, useAppDispatch } from '../hooks/redux';
+import { settlementsAPI } from '../services/api';
+import { useEffect } from 'react';
+import { Alert, CircularProgress } from '@mui/material';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -75,46 +78,73 @@ const Settlements: React.FC = () => {
   const [settleDialog, setSettleDialog] = useState(false);
   const [selectedSettlement, setSelectedSettlement] = useState<Settlement | null>(null);
   const [filter, setFilter] = useState('all');
-  // const { user } = useAppSelector((state) => state.auth); // Reserved for future use
+  const [settlements, setSettlements] = useState<Settlement[]>([]);
+  const [balances, setBalances] = useState<Array<{ name: string; amount: number; avatar: string }>>([]);
+  const [simplifiedTransactions, setSimplifiedTransactions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { user } = useAppSelector((state) => state.auth);
+  const { groups } = useAppSelector((state) => state.groups);
 
-  // Mock data for settlements
-  const settlements: Settlement[] = [
-    {
-      id: '1',
-      from: 'You',
-      to: 'John Doe',
-      amount: 125.50,
-      group: 'Trip to Vegas',
-      status: 'pending',
-      date: '2024-01-10',
-    },
-    {
-      id: '2',
-      from: 'Jane Smith',
-      to: 'You',
-      amount: 75.00,
-      group: 'Office Lunch',
-      status: 'completed',
-      date: '2024-01-08',
-      method: 'Venmo',
-    },
-    {
-      id: '3',
-      from: 'You',
-      to: 'Mike Johnson',
-      amount: 200.00,
-      group: 'Monthly Rent',
-      status: 'pending',
-      date: '2024-01-05',
-    },
-  ];
+  // Load settlements and balances
+  useEffect(() => {
+    loadSettlements();
+    loadBalances();
+  }, [filter]);
 
-  const balances = [
-    { name: 'John Doe', amount: -125.50, avatar: 'JD' },
-    { name: 'Jane Smith', amount: 75.00, avatar: 'JS' },
-    { name: 'Mike Johnson', amount: -200.00, avatar: 'MJ' },
-    { name: 'Sarah Wilson', amount: 45.00, avatar: 'SW' },
-  ];
+  const loadSettlements = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const params: any = {};
+      if (filter === 'pending') {
+        params.status = 'pending';
+      } else if (filter === 'completed') {
+        params.status = 'completed';
+      }
+      
+      const data = await settlementsAPI.getSettlements(params);
+      const settlementsList = Array.isArray(data) ? data : data.results || [];
+      
+      // Transform to match frontend interface
+      const transformed = settlementsList.map((s: any) => ({
+        id: s.id,
+        from: s.payer?.first_name || s.payer?.username || 'Unknown',
+        to: s.payee?.first_name || s.payee?.username || 'Unknown',
+        amount: parseFloat(s.amount),
+        group: s.group?.name || '',
+        status: s.status,
+        date: s.created_at ? new Date(s.created_at).toISOString().split('T')[0] : '',
+        method: s.payment_method?.method_type || s.payment_service || undefined,
+      }));
+      
+      setSettlements(transformed);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load settlements');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadBalances = async () => {
+    try {
+      const data = await settlementsAPI.getUserBalances();
+      const balancesList = data.balances || [];
+      const transactions = data.simplified_transactions || [];
+      
+      // Transform to match frontend interface
+      const transformed = balancesList.map((b: any) => ({
+        name: b.user_name,
+        amount: b.you_owe ? -b.amount : b.amount,
+        avatar: b.user_name.split(' ').map((n: string) => n[0]).join('').toUpperCase(),
+      }));
+      
+      setBalances(transformed);
+      setSimplifiedTransactions(transactions);
+    } catch (err: any) {
+      console.error('Failed to load balances:', err);
+    }
+  };
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -143,11 +173,43 @@ const Settlements: React.FC = () => {
     }
   };
 
+  const handleConfirmSettlement = async (settlementId: string) => {
+    try {
+      await settlementsAPI.confirmSettlement(settlementId);
+      loadSettlements();
+      setSettleDialog(false);
+    } catch (err: any) {
+      setError(err.message || 'Failed to confirm settlement');
+    }
+  };
+
+  const handleCompleteSettlement = async (settlementId: string) => {
+    try {
+      await settlementsAPI.completeSettlement(settlementId);
+      loadSettlements();
+      loadBalances();
+      setSettleDialog(false);
+    } catch (err: any) {
+      setError(err.message || 'Failed to complete settlement');
+    }
+  };
+
   const totalOwed = balances.filter(b => b.amount < 0).reduce((sum, b) => sum + Math.abs(b.amount), 0);
   const totalOwedToYou = balances.filter(b => b.amount > 0).reduce((sum, b) => sum + b.amount, 0);
 
   return (
     <Box>
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+      
+      {loading && settlements.length === 0 && (
+        <Box display="flex" justifyContent="center" p={4}>
+          <CircularProgress />
+        </Box>
+      )}
       <Typography variant="h4" gutterBottom>
         Settlements
       </Typography>
@@ -194,13 +256,16 @@ const Settlements: React.FC = () => {
               <Box display="flex" alignItems="center" justifyContent="space-between">
                 <Box>
                   <Typography color="text.secondary" variant="body2">
-                    Total Settled
+                    Simplified Transactions
                   </Typography>
                   <Typography variant="h5">
-                    $450.00
+                    {simplifiedTransactions.length}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Optimized for minimal payments
                   </Typography>
                 </Box>
-                <Check color="primary" fontSize="large" />
+                <SwapHoriz color="primary" fontSize="large" />
               </Box>
             </CardContent>
           </Card>
@@ -211,10 +276,10 @@ const Settlements: React.FC = () => {
               <Box display="flex" alignItems="center" justifyContent="space-between">
                 <Box>
                   <Typography color="text.secondary" variant="body2">
-                    Pending
+                    Pending Settlements
                   </Typography>
                   <Typography variant="h5">
-                    3
+                    {settlements.filter(s => s.status === 'pending').length}
                   </Typography>
                 </Box>
                 <History color="warning" fontSize="large" />
@@ -235,12 +300,48 @@ const Settlements: React.FC = () => {
 
       {/* Balances Tab */}
       <TabPanel value={tabValue} index={0}>
+        {simplifiedTransactions.length > 0 && (
+          <Card sx={{ mb: 3, bgcolor: 'info.light', color: 'info.contrastText' }}>
+            <CardContent>
+              <Box display="flex" alignItems="center" gap={1} mb={1}>
+                <SwapHoriz />
+                <Typography variant="h6">
+                  Optimized Settlement Plan
+                </Typography>
+              </Box>
+              <Typography variant="body2" sx={{ mb: 2 }}>
+                Our advanced algorithm has simplified {balances.length} individual debts into {simplifiedTransactions.length} optimized transactions.
+                This minimizes the number of payments needed to settle all balances.
+              </Typography>
+              <List dense>
+                {simplifiedTransactions.slice(0, 5).map((txn: any, idx: number) => (
+                  <ListItem key={idx}>
+                    <ListItemText
+                      primary={`${txn.from_user_name} → ${txn.to_user_name}`}
+                      secondary={`$${txn.amount.toFixed(2)}`}
+                    />
+                  </ListItem>
+                ))}
+                {simplifiedTransactions.length > 5 && (
+                  <Typography variant="caption" color="text.secondary">
+                    + {simplifiedTransactions.length - 5} more transactions
+                  </Typography>
+                )}
+              </List>
+            </CardContent>
+          </Card>
+        )}
         <Card>
           <CardContent>
             <Typography variant="h6" gutterBottom>
               Your Balances
             </Typography>
-            <List>
+            {balances.length === 0 ? (
+              <Typography variant="body2" color="text.secondary" textAlign="center" py={4}>
+                No outstanding balances
+              </Typography>
+            ) : (
+              <List>
               {balances.map((balance, index) => (
                 <React.Fragment key={balance.name}>
                   <ListItem>
@@ -278,7 +379,8 @@ const Settlements: React.FC = () => {
                   {index < balances.length - 1 && <Divider />}
                 </React.Fragment>
               ))}
-            </List>
+              </List>
+            )}
           </CardContent>
         </Card>
       </TabPanel>
@@ -426,13 +528,21 @@ const Settlements: React.FC = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDialog}>Cancel</Button>
-          <Button
-            variant="contained"
-            onClick={handleCloseDialog}
-            startIcon={<Payment />}
-          >
-            Confirm Payment
-          </Button>
+          {selectedSettlement && (
+            <Button
+              variant="contained"
+              onClick={() => {
+                if (selectedSettlement.status === 'pending') {
+                  handleConfirmSettlement(selectedSettlement.id);
+                } else {
+                  handleCompleteSettlement(selectedSettlement.id);
+                }
+              }}
+              startIcon={<Payment />}
+            >
+              {selectedSettlement.status === 'pending' ? 'Confirm Payment' : 'Mark as Completed'}
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
     </Box>

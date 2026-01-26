@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { authAPI } from '../../services/api';
+import { tokenStorage } from '../../utils/storage';
 
 export interface User {
   id: number;
@@ -21,14 +22,14 @@ interface AuthState {
   token: string | null;
   refreshToken: string | null;
   isLoading: boolean;
-  error: string | null;
+  error: string | { detail?: string; message?: string } | null;
   isAuthenticated: boolean;
 }
 
 const initialState: AuthState = {
   user: null,
-  token: localStorage.getItem('access_token'),
-  refreshToken: localStorage.getItem('refresh_token'),
+  token: tokenStorage.getAccessToken(),
+  refreshToken: tokenStorage.getRefreshToken(),
   isLoading: false,
   error: null,
   isAuthenticated: false,
@@ -40,11 +41,56 @@ export const login = createAsyncThunk(
   async (credentials: { email: string; password: string }, { rejectWithValue }) => {
     try {
       const response = await authAPI.login(credentials);
-      localStorage.setItem('access_token', response.access);
-      localStorage.setItem('refresh_token', response.refresh);
+      tokenStorage.setAccessToken(response.access);
+      tokenStorage.setRefreshToken(response.refresh);
       return response;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Login failed');
+      // Extract error message from response
+      const errorData = error.response?.data;
+      if (errorData) {
+        // Handle non-field errors (detail or message)
+        if (errorData.detail) {
+          // If detail is a string, use it directly
+          if (typeof errorData.detail === 'string') {
+            return rejectWithValue(errorData.detail);
+          }
+          // If detail is an array, join it
+          if (Array.isArray(errorData.detail)) {
+            return rejectWithValue(errorData.detail.join('; '));
+          }
+          // If detail is an object (field errors), format it
+          if (typeof errorData.detail === 'object') {
+            const errorMessages = Object.entries(errorData.detail)
+              .filter(([field]) => field !== 'username') // Filter out 'username' field errors
+              .map(([field, errors]: [string, any]) => {
+                if (Array.isArray(errors)) {
+                  return errors.join(', ');
+                }
+                return String(errors);
+              })
+              .filter(msg => msg); // Remove empty messages
+            return rejectWithValue(errorMessages.join('; ') || 'Login failed. Please check your credentials.');
+          }
+        }
+        // Handle message field
+        if (errorData.message) {
+          return rejectWithValue(errorData.message);
+        }
+        // Handle validation errors (dict of field errors) - but exclude 'username'
+        if (typeof errorData === 'object' && !errorData.detail && !errorData.message) {
+          const errorMessages = Object.entries(errorData)
+            .filter(([field]) => field !== 'username') // Filter out username field
+            .map(([field, errors]: [string, any]) => {
+              if (Array.isArray(errors)) {
+                return errors.join(', ');
+              }
+              return String(errors);
+            })
+            .filter(msg => msg); // Remove empty messages
+          return rejectWithValue(errorMessages.join('; ') || 'Login failed. Please check your credentials.');
+        }
+      }
+      return rejectWithValue('Login failed. Please check your credentials.');
     }
   }
 );
@@ -63,7 +109,25 @@ export const register = createAsyncThunk(
       const response = await authAPI.register(userData);
       return response;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data || 'Registration failed');
+      // Extract error message from response
+      const errorData = error.response?.data;
+      if (errorData) {
+        // Handle validation errors (dict of field errors)
+        if (typeof errorData === 'object' && !errorData.detail && !errorData.message) {
+          const errorMessages = Object.entries(errorData)
+            .map(([field, errors]: [string, any]) => {
+              if (Array.isArray(errors)) {
+                return `${field}: ${errors.join(', ')}`;
+              }
+              return `${field}: ${errors}`;
+            })
+            .join('; ');
+          return rejectWithValue(errorMessages || 'Registration failed');
+        }
+        // Handle single error message
+        return rejectWithValue(errorData.detail || errorData.message || 'Registration failed');
+      }
+      return rejectWithValue('Registration failed. Please try again.');
     }
   }
 );
@@ -72,17 +136,15 @@ export const logout = createAsyncThunk(
   'auth/logout',
   async (_, { getState, rejectWithValue }) => {
     try {
-      const refreshToken = localStorage.getItem('refresh_token');
+      const refreshToken = tokenStorage.getRefreshToken();
       if (refreshToken) {
         await authAPI.logout({ refresh: refreshToken });
       }
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
+      tokenStorage.clearTokens();
       return true;
     } catch (error: any) {
-      // Even if logout fails on server, clear local storage
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
+      // Even if logout fails on server, clear tokens
+      tokenStorage.clearTokens();
       return true;
     }
   }
@@ -131,7 +193,21 @@ const authSlice = createSlice({
       })
       .addCase(login.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.payload as string;
+        // Handle error message - could be string or object
+        const errorPayload = action.payload as any;
+        if (typeof errorPayload === 'string') {
+          state.error = errorPayload;
+        } else if (errorPayload?.detail) {
+          state.error = errorPayload.detail;
+        } else if (errorPayload?.message) {
+          state.error = errorPayload.message;
+        } else if (errorPayload && typeof errorPayload === 'object') {
+          // Handle validation errors
+          const errorMessages = Object.values(errorPayload).flat();
+          state.error = errorMessages.join(', ') || 'Login failed';
+        } else {
+          state.error = 'Login failed. Please check your credentials.';
+        }
         state.isAuthenticated = false;
       })
       // Register
@@ -139,13 +215,29 @@ const authSlice = createSlice({
         state.isLoading = true;
         state.error = null;
       })
-      .addCase(register.fulfilled, (state) => {
+      .addCase(register.fulfilled, (state, action) => {
         state.isLoading = false;
         state.error = null;
+        // Registration successful - user needs to verify email or can login
+        // Don't set user/token here, user needs to login after verification
       })
       .addCase(register.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.payload as string;
+        // Handle error message - could be string or object
+        const errorPayload = action.payload as any;
+        if (typeof errorPayload === 'string') {
+          state.error = errorPayload;
+        } else if (errorPayload?.detail) {
+          state.error = errorPayload.detail;
+        } else if (errorPayload?.message) {
+          state.error = errorPayload.message;
+        } else if (errorPayload && typeof errorPayload === 'object') {
+          // Handle validation errors
+          const errorMessages = Object.values(errorPayload).flat();
+          state.error = errorMessages.join(', ') || 'Registration failed';
+        } else {
+          state.error = 'Registration failed. Please try again.';
+        }
       })
       // Logout
       .addCase(logout.fulfilled, (state) => {
@@ -170,8 +262,7 @@ const authSlice = createSlice({
         // Clear tokens if user fetch fails
         state.token = null;
         state.refreshToken = null;
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
+        tokenStorage.clearTokens();
       })
       // Check auth status
       .addCase(checkAuthStatus.pending, (state) => {
@@ -199,7 +290,7 @@ export const checkAuthStatus = createAsyncThunk(
   'auth/checkAuthStatus',
   async (_, { rejectWithValue }) => {
     try {
-      const token = localStorage.getItem('access_token');
+      const token = tokenStorage.getAccessToken();
       if (!token) {
         throw new Error('No token found');
       }
@@ -209,8 +300,7 @@ export const checkAuthStatus = createAsyncThunk(
       return response;
     } catch (error: any) {
       // Clear invalid tokens
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
+      tokenStorage.clearTokens();
       return rejectWithValue(error.response?.data?.message || 'Authentication failed');
     }
   }

@@ -6,8 +6,24 @@ from apps.core.models import TimeStampedModel, UUIDModel, Currency, Category, Ta
 from apps.groups.models import Group, GroupMembership
 from decimal import Decimal, ROUND_HALF_UP
 import uuid
+import os
 
 User = get_user_model()
+
+
+def validate_receipt_size(value):
+    """Validate receipt file size (max 5MB)"""
+    max_size = 5 * 1024 * 1024  # 5MB
+    if value.size > max_size:
+        raise ValidationError(f'File size cannot exceed {max_size / (1024*1024)}MB')
+
+
+def validate_receipt_extension(value):
+    """Validate receipt file extension"""
+    ext = os.path.splitext(value.name)[1].lower()
+    allowed_extensions = ['.jpg', '.jpeg', '.png', '.pdf']
+    if ext not in allowed_extensions:
+        raise ValidationError(f'File type not allowed. Allowed types: {", ".join(allowed_extensions)}')
 
 
 class Expense(UUIDModel, TimeStampedModel):
@@ -78,7 +94,7 @@ class Expense(UUIDModel, TimeStampedModel):
     
     # Splitting information
     split_type = models.CharField(max_length=20, choices=SPLIT_TYPES, default='equal')
-    split_data = models.JSONField(default=dict)  # Store split details
+    split_data = models.JSONField(default=dict, blank=True, null=True)  # Store split details
     
     # Receipt and attachments
     receipt = models.ImageField(
@@ -86,13 +102,15 @@ class Expense(UUIDModel, TimeStampedModel):
         blank=True,
         null=True,
         validators=[
+            validate_receipt_size,
+            validate_receipt_extension,
             FileExtensionValidator(allowed_extensions=['jpg', 'jpeg', 'png', 'pdf'])
         ]
     )
-    attachments = models.JSONField(default=list)  # Store attachment URLs/paths
+    attachments = models.JSONField(default=list, blank=True, null=True)  # Store attachment URLs/paths
     
     # OCR and smart features
-    ocr_data = models.JSONField(default=dict)  # Store OCR extracted data
+    ocr_data = models.JSONField(default=dict, blank=True, null=True)  # Store OCR extracted data
     vendor = models.CharField(max_length=200, blank=True)  # Merchant/vendor name
     location = models.CharField(max_length=200, blank=True)
     
@@ -174,7 +192,8 @@ class Expense(UUIDModel, TimeStampedModel):
         super().save(*args, **kwargs)
         
         # Create expense shares after saving
-        if not hasattr(self, '_skip_share_creation'):
+        # Only auto-create if shares don't already exist (to avoid duplicates)
+        if not hasattr(self, '_skip_share_creation') and not self.shares.exists():
             self.create_expense_shares()
     
     def create_expense_shares(self):
@@ -418,6 +437,10 @@ class RecurringExpense(UUIDModel, TimeStampedModel):
     
     def __str__(self):
         return f"{self.title} ({self.get_frequency_display()})"
+    
+    def get_next_due_date(self):
+        """Get the next due date (alias for next_due_date field)"""
+        return self.next_due_date
     
     def create_next_expense(self):
         """Create the next expense instance from this template"""

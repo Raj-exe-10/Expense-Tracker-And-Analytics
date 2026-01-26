@@ -23,6 +23,7 @@ import {
   ListItemText,
   Divider,
   Alert,
+  Paper,
 } from '@mui/material';
 import {
   AttachMoney,
@@ -42,9 +43,13 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../hooks/redux';
 import { createExpense, updateExpense } from '../../store/slices/expenseSlice';
+import { fetchCurrencies, fetchCategories } from '../../store/slices/coreSlice';
+import { formatAmount } from '../../utils/formatting';
+import { sanitizeInput } from '../../utils/sanitize';
 
 interface ExpenseFormProps {
   editMode?: boolean;
+  expenseId?: string; // Add expenseId prop for edit mode
   duplicateData?: any;
   onClose?: () => void;
   onSuccess?: (expense: any) => void;
@@ -58,7 +63,8 @@ interface ExpenseShare {
 }
 
 const ExpenseForm: React.FC<ExpenseFormProps> = ({ 
-  editMode = false, 
+  editMode = false,
+  expenseId, // Get expenseId from props
   duplicateData,
   onClose,
   onSuccess,
@@ -66,19 +72,34 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
 }) => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
-  const { id } = useParams();
+  const { id: routeId } = useParams();
   
   const { groups: storeGroups } = useAppSelector((state) => state.groups);
-  const { categories } = useAppSelector((state) => state.core);
+  const { categories, currencies, loading: coreLoading } = useAppSelector((state) => state.core);
   const { currentExpense, loading } = useAppSelector((state) => state.expenses);
   
+  // Use expenseId from props, or routeId from params, or currentExpense.id (after currentExpense is declared)
+  const id = expenseId || routeId || (editMode && currentExpense?.id ? currentExpense.id : undefined);
+  
   // Use groups from props if available, otherwise from store
-  const groups = propsGroups || storeGroups || [];
+  // Ensure groups is always an array
+  const groups = Array.isArray(propsGroups) 
+    ? propsGroups 
+    : (Array.isArray(storeGroups) ? storeGroups : []);
+  
+  // Ensure currencies and categories are arrays
+  const currenciesArray = Array.isArray(currencies) ? currencies : [];
+  const categoriesArray = Array.isArray(categories) ? categories : [];
+  
+  // Get default currency (USD) or first available
+  const defaultCurrency = currenciesArray.find(c => c.code === 'USD') || currenciesArray[0];
   
   const [formData, setFormData] = useState({
+    title: '',
     description: '',
     amount: '',
     date: new Date(),
+    currency_id: defaultCurrency?.id || '',
     category_id: '',
     group_id: '',
     notes: '',
@@ -92,16 +113,28 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
   const [selectedUsers, setSelectedUsers] = useState<any[]>([]);
   const [errors, setErrors] = useState<any>({});
   const [showSplitOptions, setShowSplitOptions] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  
+  // Fetch currencies and categories on mount - always fetch to ensure we have data
+  useEffect(() => {
+    // Always fetch currencies on mount to ensure they're loaded
+    dispatch(fetchCurrencies());
+    dispatch(fetchCategories());
+  }, [dispatch]);
 
   useEffect(() => {
     if (editMode && currentExpense) {
+      const expenseDate = currentExpense.date || currentExpense.expense_date;
       setFormData({
-        description: currentExpense.description,
+        title: currentExpense.title || currentExpense.description || '',
+        description: currentExpense.description || '',
         amount: currentExpense.amount.toString(),
-        date: new Date(currentExpense.date),
-        category_id: currentExpense.category?.id || '',
-        group_id: currentExpense.group?.id || '',
-        notes: currentExpense.notes || '',
+        date: expenseDate ? new Date(expenseDate) : new Date(),
+        currency_id: currentExpense.currency?.id ? String(currentExpense.currency.id) : (defaultCurrency?.id ? String(defaultCurrency.id) : ''),
+        category_id: currentExpense.category?.id ? String(currentExpense.category.id) : '',
+        group_id: currentExpense.group?.id ? String(currentExpense.group.id) : '',
+        notes: currentExpense.description || '', // Map description to notes field in form
         tags: currentExpense.tags || [],
         receipt_image: null,
         is_recurring: false,
@@ -125,6 +158,16 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
       });
     }
   }, [editMode, currentExpense, duplicateData]);
+  
+  // Set default currency when currencies are loaded
+  useEffect(() => {
+    if (currenciesArray.length > 0 && !formData.currency_id && !editMode) {
+      const defaultCurrency = currenciesArray.find(c => c.code === 'USD') || currenciesArray[0];
+      if (defaultCurrency) {
+        setFormData(prev => ({ ...prev, currency_id: defaultCurrency.id }));
+      }
+    }
+  }, [currenciesArray, editMode, formData.currency_id]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -251,17 +294,24 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
   const validateForm = () => {
     const newErrors: any = {};
     
-    if (!formData.description.trim()) {
-      newErrors.description = 'Description is required';
+    if (!formData.title?.trim() && !formData.description.trim()) {
+      newErrors.title = 'Title or description is required';
     }
     
     if (!formData.amount || parseFloat(formData.amount) <= 0) {
       newErrors.amount = 'Valid amount is required';
     }
     
-    if (!formData.category_id) {
+    if (!formData.currency_id) {
+      newErrors.currency_id = 'Currency is required';
+    }
+    
+    // Category validation - only require if categories are available and loaded
+    if (categoriesArray.length > 0 && !formData.category_id) {
       newErrors.category_id = 'Category is required';
     }
+    // Note: If categories are not loaded, we allow submission without category
+    // as the backend allows null categories
     
     // Validate shares if splitting
     if (showSplitOptions && shares.length > 0) {
@@ -269,7 +319,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
       const totalAmount = parseFloat(formData.amount);
       
       if (Math.abs(totalShared - totalAmount) > 0.01) {
-        newErrors.shares = `Shared amounts must equal total (${totalAmount.toFixed(2)})`;
+        const totalAmountNum = typeof totalAmount === 'number' ? totalAmount : parseFloat(totalAmount || '0');
+        newErrors.shares = `Shared amounts must equal total (${totalAmountNum.toFixed(2)})`;
       }
     }
     
@@ -280,45 +331,134 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Clear previous messages
+    setSuccessMessage(null);
+    setErrorMessage(null);
+    
     if (!validateForm()) return;
     
-    // Get category name
-    const categoryMap: any = {
-      '1': 'Food & Dining',
-      '2': 'Transportation',
-      '3': 'Entertainment',
-      '4': 'Shopping',
-      '5': 'Bills & Utilities',
-      '6': 'Healthcare',
-    };
+    // Prepare shares_data in the format backend expects
+    const shares_data = showSplitOptions && shares.length > 0
+      ? shares.map(share => ({
+          user_id: share.user_id,
+          amount: share.amount,
+          percentage: share.percentage || 0
+        }))
+      : [];
+    
+    // Prepare expense data in the format backend expects
+    // Ensure title is never empty (required field) and sanitize input
+    const title = sanitizeInput((formData.title?.trim() || formData.description?.trim() || 'Untitled Expense').trim());
     
     const expenseData: any = {
-      description: formData.description,
+      title: title, // Title is required, ensure it's never empty and sanitized
+      description: sanitizeInput(formData.description?.trim() || formData.notes?.trim() || ''), // Sanitize description
       amount: parseFloat(formData.amount),
-      date: formData.date.toISOString().split('T')[0],
-      category: categoryMap[formData.category_id] || 'Other',
-      category_id: formData.category_id,
-      group_id: formData.group_id || undefined,
-      group: formData.group_id ? groups.find(g => g.id === formData.group_id)?.name : undefined,
-      notes: formData.notes,
-      tags: formData.tags,
-      paidBy: 'You',
-      shares: showSplitOptions ? shares : undefined,
+      date: formData.date.toISOString().split('T')[0], // Backend serializer maps 'date' to 'expense_date'
+      currency: formData.currency_id, // Backend expects currency UUID
     };
     
+    // Always include category_id (even if empty) to allow clearing the category
+    expenseData.category_id = formData.category_id || null;
+    
+    // Only include group if it's provided and not empty
+    if (formData.group_id) {
+      expenseData.group = formData.group_id; // Backend expects group UUID
+    }
+    
+    // Only include tag_ids if they are valid UUIDs (not string tags)
+    // Note: The tags field in the form is for string tags, not tag UUIDs
+    // If you want to use tag_ids, you need to fetch/create tags and use their UUIDs
+    // For now, we'll skip tag_ids since the form uses string tags
+    // expenseData.tag_ids = []; // Empty array for now
+    
+    // Only include shares_data if there are actual shares
+    if (shares_data && shares_data.length > 0) {
+      expenseData.shares_data = shares_data;
+    }
+    
+    // Use FormData if there's a receipt image, otherwise use JSON
+    let requestData: any;
+    if (formData.receipt_image) {
+      const formDataObj = new FormData();
+      Object.keys(expenseData).forEach(key => {
+        if (key === 'shares_data' || key === 'tag_ids') {
+          formDataObj.append(key, JSON.stringify(expenseData[key]));
+        } else if (expenseData[key] !== undefined && expenseData[key] !== null) {
+          formDataObj.append(key, expenseData[key]);
+        }
+      });
+      formDataObj.append('receipt', formData.receipt_image);
+      requestData = formDataObj;
+    } else {
+      requestData = expenseData;
+    }
+    
     try {
-      if (onSuccess) {
-        // Use the callback if provided
-        onSuccess(expenseData);
-      } else if (editMode && id) {
-        await dispatch(updateExpense({ id, data: expenseData }));
-        navigate('/expenses');
+      // Check if we're in edit mode and have an ID
+      if (editMode && id) {
+        // Update existing expense
+        const result = await dispatch(updateExpense({ id, data: requestData }));
+        if (updateExpense.fulfilled.match(result)) {
+          setSuccessMessage('Expense updated successfully!');
+          setTimeout(() => {
+            if (onSuccess) {
+              onSuccess(result.payload);
+            } else {
+              navigate('/expenses');
+            }
+            setSuccessMessage(null);
+          }, 1500);
+        } else {
+          const errorMsg = result.payload as any;
+          setErrorMessage(
+            typeof errorMsg === 'string' 
+              ? errorMsg 
+              : errorMsg?.detail || errorMsg?.message || 'Failed to update expense. Please check all required fields.'
+          );
+        }
+      } else if (onSuccess) {
+        // Use the callback if provided (for Expenses page) - create new expense
+        const result = await dispatch(createExpense(requestData));
+        if (createExpense.fulfilled.match(result)) {
+          setSuccessMessage('Expense added successfully!');
+          setTimeout(() => {
+            onSuccess(result.payload);
+            setSuccessMessage(null);
+          }, 1500);
+        } else {
+          const errorMsg = result.payload as any;
+          setErrorMessage(
+            typeof errorMsg === 'string' 
+              ? errorMsg 
+              : errorMsg?.detail || errorMsg?.message || 'Failed to add expense. Please check all required fields.'
+          );
+        }
       } else {
-        await dispatch(createExpense(expenseData));
-        navigate('/expenses');
+        // Create new expense (default)
+        const result = await dispatch(createExpense(requestData));
+        if (createExpense.fulfilled.match(result)) {
+          setSuccessMessage('Expense added successfully!');
+          setTimeout(() => {
+            navigate('/expenses');
+          }, 1500);
+        } else {
+          const errorMsg = result.payload as any;
+          setErrorMessage(
+            typeof errorMsg === 'string' 
+              ? errorMsg 
+              : errorMsg?.detail || errorMsg?.message || 'Failed to add expense. Please check all required fields.'
+          );
+        }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving expense:', error);
+      setErrorMessage(
+        error?.response?.data?.detail || 
+        error?.response?.data?.message || 
+        error?.message || 
+        'An error occurred while saving the expense. Please try again.'
+      );
     }
   };
 
@@ -336,18 +476,42 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
-      <form onSubmit={handleSubmit}>
-        <Grid container spacing={3}>
-          {/* Main Form */}
-          <Grid item xs={12} md={showSplitOptions ? 7 : 12}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  {editMode ? 'Edit Expense' : 'Add New Expense'}
-                </Typography>
-                
-                <Box sx={{ mt: 3 }}>
-                  <Grid container spacing={2}>
+      <Box sx={{ maxWidth: 1200, mx: 'auto', p: 2, pb: 12 }}>
+        <form onSubmit={handleSubmit}>
+          {/* Success/Error Messages */}
+          {successMessage && (
+            <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccessMessage(null)}>
+              {successMessage}
+            </Alert>
+          )}
+          {errorMessage && (
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErrorMessage(null)}>
+              {errorMessage}
+            </Alert>
+          )}
+          
+          <Grid container spacing={2}>
+            {/* Main Form */}
+            <Grid item xs={12} md={showSplitOptions ? 7 : 12}>
+              <Card>
+                <CardContent sx={{ pb: 2 }}>
+                  <Typography variant="h6" gutterBottom>
+                    {editMode ? 'Edit Expense' : 'Add New Expense'}
+                  </Typography>
+                  
+                  <Grid container spacing={2} sx={{ mt: 1 }}>
+                    <Grid item xs={12}>
+                      <TextField
+                        fullWidth
+                        label="Title"
+                        name="title"
+                        value={formData.title}
+                        onChange={handleInputChange}
+                        placeholder="e.g., Restaurant Bill"
+                        error={!!errors.title}
+                        helperText={errors.title || 'A brief title for this expense'}
+                      />
+                    </Grid>
                     <Grid item xs={12}>
                       <TextField
                         fullWidth
@@ -355,6 +519,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
                         name="description"
                         value={formData.description}
                         onChange={handleInputChange}
+                        multiline
+                        rows={2}
                         error={!!errors.description}
                         helperText={errors.description}
                         InputProps={{
@@ -377,6 +543,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
                         onChange={handleInputChange}
                         error={!!errors.amount}
                         helperText={errors.amount}
+                        required
                         InputProps={{
                           startAdornment: (
                             <InputAdornment position="start">
@@ -385,6 +552,42 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
                           ),
                         }}
                       />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <FormControl fullWidth required error={!!errors.currency_id}>
+                        <InputLabel>Currency</InputLabel>
+                        <Select
+                          name="currency_id"
+                          value={formData.currency_id ? String(formData.currency_id) : ''}
+                          onChange={(e) => setFormData(prev => ({ ...prev, currency_id: e.target.value ? String(e.target.value) : '' }))}
+                          label="Currency"
+                          disabled={currenciesArray.length === 0}
+                        >
+                          {currenciesArray.length > 0 ? (
+                            currenciesArray.map((currency) => (
+                              <MenuItem key={currency.id} value={String(currency.id)}>
+                                {currency.code} - {currency.name}
+                              </MenuItem>
+                            ))
+                          ) : (
+                            <MenuItem value="" disabled>
+                              {currenciesArray.length === 0 && currencies.length === 0 
+                                ? 'No currencies available. Please contact support.' 
+                                : 'Loading currencies...'}
+                            </MenuItem>
+                          )}
+                        </Select>
+                        {errors.currency_id && (
+                          <Typography variant="caption" color="error" sx={{ mt: 0.5, ml: 1.75 }}>
+                            {errors.currency_id}
+                          </Typography>
+                        )}
+                        {currenciesArray.length === 0 && (
+                          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, ml: 1.75 }}>
+                            Please wait while currencies are being loaded...
+                          </Typography>
+                        )}
+                      </FormControl>
                     </Grid>
                     
                     <Grid item xs={12} sm={6}>
@@ -408,21 +611,49 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
                     </Grid>
                     
                     <Grid item xs={12} sm={6}>
-                      <FormControl fullWidth error={!!errors.category_id}>
+                      <FormControl fullWidth required error={!!errors.category_id}>
                         <InputLabel>Category</InputLabel>
                         <Select
-                          value={formData.category_id}
+                          value={formData.category_id ? String(formData.category_id) : ''}
                           label="Category"
-                          onChange={(e) => handleSelectChange('category_id', e.target.value)}
+                          onChange={(e) => {
+                            const selectedValue = e.target.value;
+                            // Ensure we're setting the actual category ID, not the index
+                            handleSelectChange('category_id', selectedValue === '' ? '' : String(selectedValue));
+                          }}
+                          disabled={coreLoading}
+                          error={!!errors.category_id}
                         >
-                          <MenuItem value="">Select Category</MenuItem>
-                          <MenuItem value="1">Food & Dining</MenuItem>
-                          <MenuItem value="2">Transportation</MenuItem>
-                          <MenuItem value="3">Entertainment</MenuItem>
-                          <MenuItem value="4">Shopping</MenuItem>
-                          <MenuItem value="5">Bills & Utilities</MenuItem>
-                          <MenuItem value="6">Healthcare</MenuItem>
+                          <MenuItem value="">Select Category (Optional)</MenuItem>
+                          {coreLoading ? (
+                            <MenuItem value="" disabled>Loading categories...</MenuItem>
+                          ) : categoriesArray.length > 0 ? (
+                            categoriesArray.map((category: any) => (
+                              <MenuItem key={category.id} value={String(category.id)}>
+                                {category.name}
+                              </MenuItem>
+                            ))
+                          ) : (
+                            <MenuItem value="" disabled>
+                              No categories available. You can still submit without a category.
+                            </MenuItem>
+                          )}
                         </Select>
+                        {errors.category_id && (
+                          <Typography variant="caption" color="error" sx={{ mt: 0.5, ml: 1.75 }}>
+                            {errors.category_id}
+                          </Typography>
+                        )}
+                        {coreLoading && (
+                          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, ml: 1.75 }}>
+                            Loading categories...
+                          </Typography>
+                        )}
+                        {!coreLoading && categoriesArray.length === 0 && (
+                          <Typography variant="caption" color="warning.main" sx={{ mt: 0.5, ml: 1.75 }}>
+                            Categories not available. You can submit without a category, or run: python manage.py seed_categories
+                          </Typography>
+                        )}
                       </FormControl>
                     </Grid>
                     
@@ -430,13 +661,13 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
                       <FormControl fullWidth>
                         <InputLabel>Group</InputLabel>
                         <Select
-                          value={formData.group_id}
+                          value={formData.group_id ? String(formData.group_id) : ''}
                           label="Group"
-                          onChange={(e) => handleSelectChange('group_id', e.target.value)}
+                          onChange={(e) => handleSelectChange('group_id', e.target.value ? String(e.target.value) : '')}
                         >
                           <MenuItem value="">Personal Expense</MenuItem>
                           {groups.map((group: any) => (
-                            <MenuItem key={group.id} value={group.id}>
+                            <MenuItem key={group.id} value={String(group.id)}>
                               {group.name}
                             </MenuItem>
                           ))}
@@ -515,136 +746,153 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
                       />
                     </Grid>
                   </Grid>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-          
-          {/* Split Options */}
-          {showSplitOptions && (
-            <Grid item xs={12} md={5}>
-              <Card>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    Split Options
-                  </Typography>
-                  
-                  <FormControl fullWidth sx={{ mb: 2 }}>
-                    <InputLabel>Split Type</InputLabel>
-                    <Select
-                      value={formData.split_type}
-                      label="Split Type"
-                      onChange={(e) => handleSplitTypeChange(e.target.value)}
-                    >
-                      <MenuItem value="equal">Split Equally</MenuItem>
-                      <MenuItem value="amount">By Amount</MenuItem>
-                      <MenuItem value="percentage">By Percentage</MenuItem>
-                      <MenuItem value="custom">Custom Split</MenuItem>
-                    </Select>
-                  </FormControl>
-                  
-                  {errors.shares && (
-                    <Alert severity="error" sx={{ mb: 2 }}>
-                      {errors.shares}
-                    </Alert>
-                  )}
-                  
-                  <Box>
-                    {selectedUsers.map((user, index) => (
-                      <Box key={user.id}>
-                        <ListItem alignItems="flex-start" sx={{ px: 0 }}>
-                          <ListItemAvatar>
-                            <Avatar>{user.first_name[0]}</Avatar>
-                          </ListItemAvatar>
-                          <ListItemText
-                            primary={`${user.first_name} ${user.last_name}`}
-                            secondary={
-                              <Box display="flex" gap={1} mt={1}>
-                                {formData.split_type === 'amount' && (
-                                  <TextField
-                                    size="small"
-                                    type="number"
-                                    label="Amount"
-                                    value={shares.find(s => s.user_id === user.id)?.amount || 0}
-                                    onChange={(e) => handleShareChange(user.id, 'amount', parseFloat(e.target.value))}
-                                    InputProps={{
-                                      startAdornment: <InputAdornment position="start">$</InputAdornment>,
-                                    }}
-                                  />
-                                )}
-                                {formData.split_type === 'percentage' && (
-                                  <TextField
-                                    size="small"
-                                    type="number"
-                                    label="Percentage"
-                                    value={shares.find(s => s.user_id === user.id)?.percentage || 0}
-                                    onChange={(e) => handleShareChange(user.id, 'percentage', parseFloat(e.target.value))}
-                                    InputProps={{
-                                      endAdornment: <InputAdornment position="end">%</InputAdornment>,
-                                    }}
-                                  />
-                                )}
-                                {formData.split_type === 'equal' && (
-                                  <Typography variant="body2">
-                                    ${shares.find(s => s.user_id === user.id)?.amount.toFixed(2) || '0.00'}
-                                  </Typography>
-                                )}
-                              </Box>
-                            }
-                          />
-                        </ListItem>
-                        {index < selectedUsers.length - 1 && <Divider />}
-                      </Box>
-                    ))}
-                  </Box>
-                  
-                  {formData.amount && (
-                    <Box mt={2} p={2} bgcolor="grey.100" borderRadius={1}>
-                      <Typography variant="body2" color="text.secondary">
-                        Total: ${formData.amount}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Shared: ${totalShared.toFixed(2)}
-                      </Typography>
-                      {Math.abs(remainingAmount) > 0.01 && (
-                        <Typography variant="body2" color="error">
-                          Remaining: ${remainingAmount.toFixed(2)}
-                        </Typography>
-                      )}
-                    </Box>
-                  )}
                 </CardContent>
               </Card>
-            </Grid>
-          )}
-          
-          {/* Actions */}
-          <Grid item xs={12}>
-            <Box display="flex" justifyContent="flex-end" gap={2}>
-              <Button
-                variant="outlined"
-                onClick={(e) => {
-                  e.preventDefault();
-                  if (onClose) {
-                    onClose();
-                  } else {
-                    navigate('/expenses');
-                  }
+              
+              {/* Action Buttons - Sticky at bottom for easy access */}
+              <Box 
+                display="flex" 
+                justifyContent="flex-end" 
+                gap={2} 
+                sx={{ 
+                  mt: 3,
+                  position: 'sticky',
+                  bottom: 20,
+                  backgroundColor: 'background.paper',
+                  py: 2,
+                  px: 3,
+                  borderRadius: 2,
+                  boxShadow: 4,
+                  zIndex: 1000,
+                  border: '1px solid',
+                  borderColor: 'divider',
                 }}
               >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                variant="contained"
-                disabled={loading}
-              >
-                {loading ? 'Saving...' : editMode ? 'Update Expense' : 'Add Expense'}
-              </Button>
-            </Box>
+                <Button
+                  variant="outlined"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (onClose) {
+                      onClose();
+                    } else {
+                      navigate('/expenses');
+                    }
+                  }}
+                  size="large"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant="contained"
+                  disabled={loading || coreLoading}
+                  size="large"
+                >
+                  {loading ? 'Saving...' : editMode ? 'Update Expense' : 'Add Expense'}
+                </Button>
+              </Box>
+            </Grid>
+            
+            {/* Split Options */}
+            {showSplitOptions && (
+              <Grid item xs={12} md={5}>
+                <Card sx={{ position: 'sticky', top: 20, maxHeight: 'calc(100vh - 40px)', overflowY: 'auto' }}>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                      Split Options
+                    </Typography>
+                    
+                    <FormControl fullWidth sx={{ mb: 2 }}>
+                      <InputLabel>Split Type</InputLabel>
+                      <Select
+                        value={formData.split_type}
+                        label="Split Type"
+                        onChange={(e) => handleSplitTypeChange(e.target.value)}
+                      >
+                        <MenuItem value="equal">Split Equally</MenuItem>
+                        <MenuItem value="amount">By Amount</MenuItem>
+                        <MenuItem value="percentage">By Percentage</MenuItem>
+                        <MenuItem value="custom">Custom Split</MenuItem>
+                      </Select>
+                    </FormControl>
+                    
+                    {errors.shares && (
+                      <Alert severity="error" sx={{ mb: 2 }}>
+                        {errors.shares}
+                      </Alert>
+                    )}
+                    
+                    <Box sx={{ maxHeight: 400, overflowY: 'auto' }}>
+                      {selectedUsers.map((user, index) => (
+                        <Box key={user.id}>
+                          <ListItem alignItems="flex-start" sx={{ px: 0 }}>
+                            <ListItemAvatar>
+                              <Avatar>{user.first_name?.[0] || 'U'}</Avatar>
+                            </ListItemAvatar>
+                            <ListItemText
+                              primary={`${user.first_name || ''} ${user.last_name || ''}`.trim() || user.name || 'Unknown User'}
+                              secondary={
+                                <Box display="flex" gap={1} mt={1}>
+                                  {formData.split_type === 'amount' && (
+                                    <TextField
+                                      size="small"
+                                      type="number"
+                                      label="Amount"
+                                      value={shares.find(s => s.user_id === user.id)?.amount || 0}
+                                      onChange={(e) => handleShareChange(user.id, 'amount', parseFloat(e.target.value) || 0)}
+                                      InputProps={{
+                                        startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                                      }}
+                                    />
+                                  )}
+                                  {formData.split_type === 'percentage' && (
+                                    <TextField
+                                      size="small"
+                                      type="number"
+                                      label="Percentage"
+                                      value={shares.find(s => s.user_id === user.id)?.percentage || 0}
+                                      onChange={(e) => handleShareChange(user.id, 'percentage', parseFloat(e.target.value) || 0)}
+                                      InputProps={{
+                                        endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                                      }}
+                                    />
+                                  )}
+                                  {formData.split_type === 'equal' && (
+                                    <Typography variant="body2">
+                                      ${formatAmount(shares.find(s => s.user_id === user.id)?.amount || 0)}
+                                    </Typography>
+                                  )}
+                                </Box>
+                              }
+                            />
+                          </ListItem>
+                          {index < selectedUsers.length - 1 && <Divider />}
+                        </Box>
+                      ))}
+                    </Box>
+                    
+                    {formData.amount && (
+                      <Box mt={2} p={2} bgcolor="grey.100" borderRadius={1}>
+                        <Typography variant="body2" color="text.secondary">
+                          Total: ${formData.amount}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Shared: ${totalShared.toFixed(2)}
+                        </Typography>
+                        {Math.abs(remainingAmount) > 0.01 && (
+                          <Typography variant="body2" color="error">
+                            Remaining: ${remainingAmount.toFixed(2)}
+                          </Typography>
+                        )}
+                      </Box>
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
+            )}
           </Grid>
-        </Grid>
-      </form>
+        </form>
+      </Box>
     </LocalizationProvider>
   );
 };

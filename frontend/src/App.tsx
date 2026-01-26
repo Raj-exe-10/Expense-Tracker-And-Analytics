@@ -16,11 +16,13 @@ import { theme } from './theme/theme';
 // Components
 import { LoginForm } from './components/auth/LoginForm';
 import { RegisterForm } from './components/auth/RegisterForm';
+import { ForgotPasswordForm } from './components/auth/ForgotPasswordForm';
 import { DashboardLayout } from './components/dashboard/DashboardLayout';
 
 // Pages
 import { Dashboard } from './pages/Dashboard';
 import Expenses from './pages/Expenses';
+import ExpenseDetail from './pages/ExpenseDetail';
 import Groups from './pages/Groups';
 import Analytics from './pages/Analytics';
 import Settings from './pages/Settings';
@@ -155,6 +157,16 @@ function App() {
               </PublicRoute>
             }
           />
+          <Route
+            path="/forgot-password"
+            element={
+              <PublicRoute>
+                <AuthLayout>
+                  <ForgotPasswordForm />
+                </AuthLayout>
+              </PublicRoute>
+            }
+          />
           
           {/* Protected Routes */}
           <Route
@@ -185,6 +197,28 @@ function App() {
               <AuthWrapper>
                 <DashboardLayout>
                   <Expenses />
+                </DashboardLayout>
+              </AuthWrapper>
+            }
+          />
+          
+          <Route
+            path="/expenses/:id"
+            element={
+              <AuthWrapper>
+                <DashboardLayout>
+                  <ExpenseDetail />
+                </DashboardLayout>
+              </AuthWrapper>
+            }
+          />
+          
+          <Route
+            path="/expenses/:id/edit"
+            element={
+              <AuthWrapper>
+                <DashboardLayout>
+                  <ExpenseDetail />
                 </DashboardLayout>
               </AuthWrapper>
             }

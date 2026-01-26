@@ -26,7 +26,8 @@ class GroupViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         return Group.objects.filter(
-            members=self.request.user
+            memberships__user=self.request.user,
+            memberships__is_active=True
         ).distinct()
     
     def perform_create(self, serializer):

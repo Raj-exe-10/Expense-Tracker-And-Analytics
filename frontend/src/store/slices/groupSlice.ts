@@ -160,7 +160,15 @@ const groupSlice = createSlice({
       })
       .addCase(fetchGroups.fulfilled, (state, action) => {
         state.loading = false;
-        state.groups = action.payload;
+        // Handle both paginated and non-paginated responses
+        if (Array.isArray(action.payload)) {
+          state.groups = action.payload;
+        } else if (action.payload?.results) {
+          // Paginated response
+          state.groups = action.payload.results;
+        } else {
+          state.groups = [];
+        }
       })
       .addCase(fetchGroups.rejected, (state, action) => {
         state.loading = false;

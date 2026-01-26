@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { settlementsAPI } from '../services/api';
 import {
   Box,
   Grid,
@@ -32,6 +33,12 @@ import {
 } from '@mui/icons-material';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '../store';
+import { fetchAnalyticsSummary } from '../store/slices/analyticsSlice';
+import { fetchExpenses } from '../store/slices/expenseSlice';
+import { fetchGroups } from '../store/slices/groupSlice';
+import { formatDistanceToNow } from 'date-fns';
+import { expensesAPI } from '../services/api';
+import { formatAmount } from '../utils/formatting';
 
 interface StatCardProps {
   title: string;
@@ -134,70 +141,82 @@ export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
   const { user } = useSelector((state: RootState) => state.auth);
+  const { summary, loading: analyticsLoading } = useSelector((state: RootState) => state.analytics);
+  const { expenses, loading: expensesLoading } = useSelector((state: RootState) => state.expenses);
+  const { groups, loading: groupsLoading } = useSelector((state: RootState) => state.groups);
 
-  // Mock data - In real app, this would come from Redux store
-  const [stats] = useState({
-    totalExpenses: 2450.75,
-    monthlyBudget: 3000,
-    groupCount: 5,
-    pendingSettlements: 125.50,
-  });
+  const [pendingSettlements, setPendingSettlements] = useState(0);
+  const [loading, setLoading] = useState(false);
 
-  const [recentExpenses] = useState<RecentExpense[]>([
-    {
-      id: '1',
-      description: 'Dinner at Italian Restaurant',
-      amount: 85.50,
-      category: 'Food & Dining',
-      date: '2024-01-15',
-      paidBy: 'You',
-      group: 'Friends'
-    },
-    {
-      id: '2',
-      description: 'Uber ride to airport',
-      amount: 32.00,
-      category: 'Transportation',
-      date: '2024-01-14',
-      paidBy: 'John',
-    },
-    {
-      id: '3',
-      description: 'Grocery shopping',
-      amount: 125.75,
-      category: 'Groceries',
-      date: '2024-01-13',
-      paidBy: 'You',
-      group: 'Roommates'
-    },
-  ]);
+  // Fetch data on mount
+  useEffect(() => {
+    const loadDashboardData = async () => {
+      setLoading(true);
+      try {
+        // Calculate date range for current month
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        
+        // Fetch analytics for current month
+        await dispatch(fetchAnalyticsSummary({
+          startDate: startOfMonth.toISOString().split('T')[0],
+          endDate: endOfMonth.toISOString().split('T')[0],
+        }));
+        
+        // Fetch recent expenses
+        await dispatch(fetchExpenses({ limit: 5 }));
+        
+        // Fetch groups
+        await dispatch(fetchGroups());
+        
+        // Fetch pending settlements
+        try {
+          const balancesData = await settlementsAPI.getUserBalances();
+          const totalOwed = balancesData.total_owed || 0;
+          setPendingSettlements(totalOwed);
+        } catch (err) {
+          console.error('Failed to load settlements:', err);
+          setPendingSettlements(0);
+        }
+      } catch (error) {
+        console.error('Failed to load dashboard data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const [recentActivities] = useState<RecentActivity[]>([
-    {
-      id: '1',
-      type: 'expense',
-      message: 'added a new expense for Dinner',
-      amount: 85.50,
-      date: '2 hours ago',
-      user: 'You',
-    },
-    {
-      id: '2',
-      type: 'settlement',
-      message: 'settled up with John',
-      amount: 45.00,
-      date: '1 day ago',
-      user: 'You',
-    },
-    {
-      id: '3',
-      type: 'group',
-      message: 'joined Weekend Trip group',
-      date: '2 days ago',
-      user: 'Sarah',
-      avatar: '/avatars/sarah.jpg'
-    },
-  ]);
+    loadDashboardData();
+  }, [dispatch]);
+
+  // Calculate stats from real data
+  const stats = {
+    totalExpenses: summary?.total_expenses || 0,
+    monthlyBudget: 3000, // TODO: Get from user settings
+    groupCount: groups.length,
+    pendingSettlements: pendingSettlements,
+  };
+
+  // Get recent expenses from store
+  const recentExpenses: RecentExpense[] = expenses.slice(0, 5).map(expense => ({
+    id: expense.id,
+    description: expense.title || expense.description,
+    amount: expense.amount,
+    category: expense.category?.name || 'Other',
+    date: expense.date || expense.expense_date || '',
+    paidBy: expense.created_by?.first_name || 'You',
+    group: expense.group?.name,
+  }));
+
+  // Recent activities (simplified - could be enhanced with notifications)
+  const recentActivities: RecentActivity[] = expenses.slice(0, 3).map((expense, index) => ({
+    id: expense.id,
+    type: 'expense' as const,
+    message: `added a new expense for ${expense.title || expense.description}`,
+    amount: expense.amount,
+    date: expense.created_at ? formatDistanceToNow(new Date(expense.created_at), { addSuffix: true }) : 'Recently',
+    user: expense.created_by?.first_name || 'You',
+  }));
 
   const budgetUsed = (stats.totalExpenses / stats.monthlyBudget) * 100;
   const budgetColor = budgetUsed > 90 ? 'error' : budgetUsed > 75 ? 'warning' : 'success';
@@ -388,7 +407,7 @@ export const Dashboard: React.FC = () => {
                     />
                     <Box textAlign="right">
                       <Typography variant="h6" component="span">
-                        ${expense.amount.toFixed(2)}
+                        ${formatAmount(expense.amount)}
                       </Typography>
                     </Box>
                   </ListItem>
@@ -428,7 +447,7 @@ export const Dashboard: React.FC = () => {
                           </Typography>
                           {activity.amount && (
                             <Chip
-                              label={`$${activity.amount.toFixed(2)}`}
+                              label={`$${formatAmount(activity.amount)}`}
                               size="small"
                               sx={{ ml: 1 }}
                             />
