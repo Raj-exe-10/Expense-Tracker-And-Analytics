@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { settlementsAPI } from '../services/api';
+import { settlementsAPI, notificationsAPI } from '../services/api';
 import {
   Box,
   Grid,
@@ -215,6 +215,7 @@ export const Dashboard: React.FC = () => {
   const [pendingSettlements, setPendingSettlements] = useState({ youOwe: 0, owedToYou: 0 });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [recentActivities, setRecentActivities] = useState<any[]>([]);
   
   // Snackbar state
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' }>({
@@ -258,6 +259,88 @@ export const Dashboard: React.FC = () => {
       } catch (err) {
         console.error('Failed to load settlements:', err);
         setPendingSettlements({ youOwe: 0, owedToYou: 0 });
+      }
+      
+      // Fetch recent activities from notifications
+      try {
+        const notificationsData = await notificationsAPI.getNotifications({ limit: 10 });
+        const notifications = Array.isArray(notificationsData) ? notificationsData : notificationsData.results || [];
+        
+        // Transform notifications into activities
+        const activities = notifications.map((notification: any) => {
+          // Determine activity type and message based on notification type
+          let activityType = 'info';
+          let actionVerb = 'performed an action';
+          
+          switch (notification.notification_type) {
+            case 'expense_added':
+              activityType = 'expense_added';
+              actionVerb = 'added';
+              break;
+            case 'expense_updated':
+              activityType = 'expense_updated';
+              actionVerb = 'updated';
+              break;
+            case 'expense_deleted':
+              activityType = 'expense_deleted';
+              actionVerb = 'deleted';
+              break;
+            case 'settlement_completed':
+            case 'payment_received':
+              activityType = 'settlement';
+              actionVerb = 'settled';
+              break;
+            case 'payment_reminder':
+              activityType = 'reminder';
+              actionVerb = 'sent a reminder for';
+              break;
+            case 'group_joined':
+            case 'group_invitation':
+              activityType = 'group';
+              actionVerb = 'joined';
+              break;
+            default:
+              activityType = notification.notification_type || 'info';
+              actionVerb = notification.title?.toLowerCase().includes('update') ? 'updated' : 'added';
+          }
+          
+          // Extract amount from metadata or message
+          let amount = 0;
+          if (notification.metadata?.amount) {
+            amount = Number(notification.metadata.amount);
+          } else {
+            // Try to extract amount from message
+            const amountMatch = notification.message?.match(/\$(\d+(?:\.\d{2})?)/);
+            if (amountMatch) {
+              amount = parseFloat(amountMatch[1]);
+            }
+          }
+          
+          // Extract expense title from message
+          let expenseTitle = '';
+          const titleMatch = notification.message?.match(/"([^"]+)"/);
+          if (titleMatch) {
+            expenseTitle = titleMatch[1];
+          }
+          
+          return {
+            id: notification.id,
+            type: activityType,
+            actionVerb,
+            title: expenseTitle || notification.title,
+            message: notification.message,
+            amount,
+            date: notification.created_at ? formatDistanceToNow(new Date(notification.created_at), { addSuffix: true }) : 'Recently',
+            user: notification.sender?.first_name || 'Someone',
+            groupName: notification.metadata?.group_name || (notification.message?.match(/in (\w+)$/)?.[1]),
+            isRead: notification.is_read,
+          };
+        });
+        
+        setRecentActivities(activities);
+      } catch (err) {
+        console.error('Failed to load activities:', err);
+        setRecentActivities([]);
       }
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
@@ -310,23 +393,13 @@ export const Dashboard: React.FC = () => {
     isGroupExpense: !!expense.group,
   }));
 
-  // Recent activities from expenses
-  const recentActivities = expenses.slice(0, 5).map((expense) => ({
-    id: expense.id,
-    type: expense.group ? 'group_expense' : 'expense' as const,
-    message: `added "${expense.title || expense.description}"`,
-    amount: Number(expense.amount) || 0,
-    date: expense.created_at ? formatDistanceToNow(new Date(expense.created_at), { addSuffix: true }) : 'Recently',
-    user: expense.paid_by?.first_name || expense.created_by?.first_name || 'You',
-    groupName: expense.group?.name,
-  }));
-
   const budgetUsed = stats.monthlyBudget > 0 ? (stats.totalExpenses / stats.monthlyBudget) * 100 : 0;
   const budgetColor = budgetUsed > 90 ? 'error' : budgetUsed > 75 ? 'warning' : 'success';
 
   // Handlers
   const handleAddExpense = () => navigate('/expenses', { state: { openAddForm: true } });
   const handleViewAllExpenses = () => navigate('/expenses');
+  const handleViewAllActivities = () => navigate('/notifications');
   const handleViewAnalytics = () => navigate('/analytics');
   const handleViewGroups = () => navigate('/groups');
   const handleViewSettlements = () => navigate('/settlements');
@@ -690,36 +763,54 @@ export const Dashboard: React.FC = () => {
                 </Box>
               ) : (
                 <List disablePadding>
-                  {recentActivities.map((activity, index) => (
+                  {recentActivities.map((activity, index) => {
+                    // Determine avatar color based on activity type
+                    const getAvatarColor = () => {
+                      switch (activity.type) {
+                        case 'expense_added': return theme.palette.success.light;
+                        case 'expense_updated': return theme.palette.info.light;
+                        case 'expense_deleted': return theme.palette.error.light;
+                        case 'settlement': return theme.palette.success.main;
+                        case 'reminder': return theme.palette.warning.light;
+                        case 'group': return theme.palette.primary.light;
+                        default: return theme.palette.primary.light;
+                      }
+                    };
+                    
+                    return (
                     <ListItem
                       key={activity.id}
                       divider={index < recentActivities.length - 1}
-                      sx={{ px: 0, py: 1.5 }}
+                      sx={{ 
+                        px: 0, 
+                        py: 1.5,
+                        opacity: activity.isRead ? 0.8 : 1,
+                        bgcolor: activity.isRead ? 'transparent' : 'action.hover',
+                        borderRadius: 1,
+                      }}
                     >
                       <ListItemAvatar>
                         <Avatar 
                           sx={{ 
-                            bgcolor: activity.type === 'group_expense' 
-                              ? theme.palette.success.light 
-                              : theme.palette.primary.light,
+                            bgcolor: getAvatarColor(),
                             width: 40,
                             height: 40,
                           }}
                         >
-                          {activity.user.charAt(0).toUpperCase()}
+                          {activity.user?.charAt(0)?.toUpperCase() || '?'}
                         </Avatar>
                       </ListItemAvatar>
                       <ListItemText
                         primary={
                           <Box>
                             <Typography variant="body2" component="span">
-                              <strong>{activity.user}</strong> {activity.message}
+                              <strong>{activity.user}</strong> {activity.actionVerb} "{activity.title}"
                             </Typography>
                             {activity.amount > 0 && (
                               <Chip
                                 label={`$${formatAmount(activity.amount)}`}
                                 size="small"
-                                color="primary"
+                                color={activity.type === 'expense_deleted' ? 'error' : 'primary'}
                                 variant="outlined"
                                 sx={{ ml: 1, height: 20, fontSize: '0.7rem' }}
                               />
@@ -745,7 +836,8 @@ export const Dashboard: React.FC = () => {
                         }
                       />
                     </ListItem>
-                  ))}
+                    );
+                  })}
                 </List>
               )}
               
@@ -753,7 +845,7 @@ export const Dashboard: React.FC = () => {
                 fullWidth 
                 variant="outlined" 
                 sx={{ mt: 2 }} 
-                onClick={handleViewAllExpenses}
+                onClick={handleViewAllActivities}
                 endIcon={<ArrowForward />}
               >
                 View All Activities
