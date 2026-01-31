@@ -142,7 +142,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   
-  // Fetch currencies and categories on mount
+  // Fetch currencies, categories, and groups on mount
   useEffect(() => {
     dispatch(fetchCurrencies());
     dispatch(fetchCategories());
@@ -159,14 +159,25 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
   useEffect(() => {
     if (editMode && currentExpense) {
       const expenseDate = currentExpense.date || currentExpense.expense_date;
+      const groupId = currentExpense.group?.id ? String(currentExpense.group.id) : '';
+      const categoryId = currentExpense.category?.id ? String(currentExpense.category.id) : '';
+      
+      console.log('Edit mode - Loading expense:', {
+        group_id: groupId,
+        category_id: categoryId,
+        group: currentExpense.group,
+        category: currentExpense.category,
+        availableGroups: groups.length,
+      });
+      
       setFormData({
         title: currentExpense.title || currentExpense.description || '',
         description: currentExpense.description || '',
         amount: currentExpense.amount.toString(),
         date: expenseDate ? new Date(expenseDate) : new Date(),
         currency_id: currentExpense.currency?.id ? String(currentExpense.currency.id) : (defaultCurrency?.id ? String(defaultCurrency.id) : ''),
-        category_id: currentExpense.category?.id ? String(currentExpense.category.id) : '',
-        group_id: currentExpense.group?.id ? String(currentExpense.group.id) : '',
+        category_id: categoryId,
+        group_id: groupId,
         notes: currentExpense.description || '',
         tags: currentExpense.tags || [],
         receipt_image: null,
@@ -177,10 +188,6 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
       if (currentExpense.paid_by) {
         setPaidBy(String(currentExpense.paid_by.id || currentExpense.paid_by));
       }
-      
-      if (currentExpense.group?.id) {
-        loadGroupMembers(currentExpense.group.id);
-      }
     } else if (duplicateData) {
       setFormData({
         ...duplicateData,
@@ -189,6 +196,15 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
       });
     }
   }, [editMode, currentExpense, duplicateData]);
+
+  // Re-set group_id if groups loaded after currentExpense was set
+  useEffect(() => {
+    if (editMode && currentExpense?.group?.id && groups.length > 0 && !formData.group_id) {
+      const groupId = String(currentExpense.group.id);
+      console.log('Re-setting group_id after groups loaded:', groupId);
+      setFormData(prev => ({ ...prev, group_id: groupId }));
+    }
+  }, [editMode, currentExpense, groups, formData.group_id]);
   
   // Set default currency when currencies are loaded
   useEffect(() => {
@@ -247,6 +263,13 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
       setLoadingMembers(false);
     }
   }, [formData.amount, currentUser?.id]);
+
+  // Load group members when group_id changes or in edit mode
+  useEffect(() => {
+    if (formData.group_id && !showSplitOptions && groupMembers.length === 0 && !loadingMembers) {
+      loadGroupMembers(formData.group_id);
+    }
+  }, [formData.group_id, showSplitOptions, groupMembers.length, loadingMembers, loadGroupMembers]);
 
   // Recalculate shares when amount changes
   useEffect(() => {
@@ -373,6 +396,11 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
     
     if (!formData.currency_id) {
       newErrors.currency_id = 'Currency is required';
+    }
+    
+    // Group is mandatory
+    if (!formData.group_id) {
+      newErrors.group_id = 'Please select a group for this expense';
     }
     
     // Validate shares if group expense
@@ -624,61 +652,76 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
                     </Grid>
                     <Grid item xs={12} sm={6}>
                       <FormControl fullWidth>
-                        <InputLabel>Category</InputLabel>
+                        <InputLabel id="category-select-label" shrink>Category</InputLabel>
                         <Select
+                          native
+                          labelId="category-select-label"
+                          id="category-select"
                           value={formData.category_id}
                           label="Category"
-                          onChange={(e) => handleSelectChange('category_id', e.target.value)}
+                          onChange={(e) => {
+                            const selectedValue = e.target.value as string;
+                            console.log('Category selected:', selectedValue);
+                            setFormData(prev => ({
+                              ...prev,
+                              category_id: selectedValue,
+                            }));
+                          }}
+                          inputProps={{
+                            id: 'category-native-select',
+                          }}
                         >
-                          <MenuItem value="">
-                            <em>No Category</em>
-                          </MenuItem>
+                          <option value="">No Category</option>
                           {categoriesArray.map((category: any) => (
-                            <MenuItem key={category.id} value={String(category.id)}>
+                            <option 
+                              key={`category-option-${category.id}`} 
+                              value={String(category.id)}
+                            >
                               {category.name}
-                            </MenuItem>
+                            </option>
                           ))}
                         </Select>
                       </FormControl>
                     </Grid>
                     
-                    {/* Group Selection */}
+                    {/* Group Selection - Required */}
                     <Grid item xs={12}>
-                      <FormControl fullWidth>
-                        <InputLabel>Group (Optional)</InputLabel>
+                      <FormControl fullWidth required error={!!errors.group_id}>
+                        <InputLabel id="group-select-label" shrink>Group *</InputLabel>
                         <Select
+                          native
+                          labelId="group-select-label"
+                          id="group-select"
                           value={formData.group_id}
-                          label="Group (Optional)"
-                          onChange={(e) => handleSelectChange('group_id', e.target.value)}
-                          startAdornment={
-                            <InputAdornment position="start">
-                              <People color="action" />
-                            </InputAdornment>
-                          }
+                          label="Group *"
+                          onChange={(e) => {
+                            const value = e.target.value as string;
+                            console.log('Group selected:', value);
+                            handleSelectChange('group_id', value);
+                          }}
+                          inputProps={{
+                            id: 'group-native-select',
+                          }}
                         >
-                          <MenuItem value="">
-                            <em>Personal Expense (No Group)</em>
-                          </MenuItem>
+                          <option value="">-- Select a Group --</option>
                           {groups.map((group: any) => (
-                            <MenuItem key={group.id} value={String(group.id)}>
-                              <Box display="flex" alignItems="center" gap={1}>
-                                <Avatar sx={{ width: 24, height: 24, fontSize: '0.75rem', bgcolor: 'primary.main' }}>
-                                  {group.name?.[0] || 'G'}
-                                </Avatar>
-                                {group.name}
-                                {group.member_count && (
-                                  <Chip label={`${group.member_count} members`} size="small" variant="outlined" />
-                                )}
-                              </Box>
-                            </MenuItem>
+                            <option key={`group-option-${group.id}`} value={String(group.id)}>
+                              {group.name}
+                              {group.member_count ? ` (${group.member_count} members)` : ''}
+                            </option>
                           ))}
                         </Select>
+                        {errors.group_id && (
+                          <Typography variant="caption" color="error" sx={{ mt: 0.5, display: 'block' }}>
+                            {errors.group_id}
+                          </Typography>
+                        )}
+                        {!errors.group_id && (
+                          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                            Select a group to split this expense with others
+                          </Typography>
+                        )}
                       </FormControl>
-                      {!formData.group_id && (
-                        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                          Select a group to split this expense with others
-                        </Typography>
-                      )}
                     </Grid>
                     
                     {/* Description */}

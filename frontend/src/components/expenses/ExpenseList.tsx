@@ -135,7 +135,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ groupId, currentGroupFilter, 
 
   const handleEdit = () => {
     if (selectedExpense) {
-      navigate(`/expenses/edit/${selectedExpense.id}`);
+      navigate(`/expenses/${selectedExpense.id}/edit`);
     }
     handleMenuClose();
   };
@@ -242,31 +242,42 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ groupId, currentGroupFilter, 
           />
           
           <FormControl size="small" sx={{ minWidth: 150 }}>
-            <InputLabel>Category</InputLabel>
+            <InputLabel id="expense-category-filter-label" shrink>Category</InputLabel>
             <Select
+              native
+              labelId="expense-category-filter-label"
+              id="expense-category-filter"
               value={categoryFilter}
               label="Category"
-              onChange={(e) => setCategoryFilter(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value as string;
+                setCategoryFilter(value);
+              }}
             >
-              <MenuItem value="all">All Categories</MenuItem>
+              <option value="all">All Categories</option>
               {categoriesArray.map((cat: any) => (
-                <MenuItem key={cat.id} value={cat.id}>
+                <option key={`cat-filter-${cat.id}`} value={String(cat.id)}>
                   {cat.name}
-                </MenuItem>
+                </option>
               ))}
             </Select>
           </FormControl>
 
           <FormControl size="small" sx={{ minWidth: 150 }}>
-            <InputLabel>Group</InputLabel>
+            <InputLabel id="expense-group-filter-label">Group</InputLabel>
             <Select
+              labelId="expense-group-filter-label"
+              id="expense-group-filter"
               value={groupFilter}
               label="Group"
-              onChange={(e) => setGroupFilter(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value as string;
+                setGroupFilter(value);
+              }}
             >
               <MenuItem value="all">All Groups</MenuItem>
               {groupsArray.map((g: any) => (
-                <MenuItem key={g.id} value={g.id}>
+                <MenuItem key={`group-filter-${g.id}`} value={String(g.id)}>
                   {g.name}
                 </MenuItem>
               ))}

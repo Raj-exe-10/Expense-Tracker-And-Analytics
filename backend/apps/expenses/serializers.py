@@ -59,19 +59,44 @@ class ExpenseCommentSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'expense', 'user', 'created_at']
 
 
+class GroupSimpleSerializer(serializers.ModelSerializer):
+    """Simple group serializer for nested representations"""
+    class Meta:
+        model = Group
+        fields = ['id', 'name', 'group_type', 'member_count']
+        read_only_fields = fields
+
+
+class CurrencySimpleSerializer(serializers.ModelSerializer):
+    """Simple currency serializer for nested representations"""
+    class Meta:
+        model = Currency
+        fields = ['id', 'code', 'name', 'symbol']
+        read_only_fields = fields
+
+
 class ExpenseSerializer(serializers.ModelSerializer):
     paid_by = UserSimpleSerializer(read_only=True)
     created_by = serializers.SerializerMethodField()  # Alias for paid_by for backward compatibility
     category = CategorySerializer(read_only=True)
     category_id = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
-    group = serializers.PrimaryKeyRelatedField(
+    # Read: return full group object, Write: accept group ID
+    group = GroupSimpleSerializer(read_only=True)
+    group_id = serializers.PrimaryKeyRelatedField(
+        source='group',
         queryset=Group.objects.all(),
         required=False,
-        allow_null=True
+        allow_null=True,
+        write_only=True
     )
-    currency = serializers.PrimaryKeyRelatedField(
+    # Read: return full currency object, Write: accept currency ID  
+    currency = CurrencySimpleSerializer(read_only=True)
+    currency_id = serializers.PrimaryKeyRelatedField(
+        source='currency',
         queryset=Currency.objects.all(),
-        required=True
+        required=False,
+        allow_null=True,
+        write_only=True
     )
     tags = TagSerializer(many=True, read_only=True)
     tag_ids = serializers.ListField(
@@ -89,13 +114,14 @@ class ExpenseSerializer(serializers.ModelSerializer):
     total_shares = serializers.SerializerMethodField()
     date = serializers.DateField(source='expense_date', required=False)  # Alias for expense_date - frontend sends 'date'
     expense_date = serializers.DateField(required=False, allow_null=True)  # Explicit field - can be sent directly
-    receipt_image = serializers.ImageField(source='receipt', required=False)  # Alias for receipt
+    receipt_image = serializers.ImageField(source='receipt', required=False, allow_null=True, allow_empty_file=True)  # Alias for receipt
     
     class Meta:
         model = Expense
         fields = [
-            'id', 'title', 'description', 'amount', 'currency', 'expense_date', 'date',
-            'category', 'category_id', 'group', 'paid_by', 'created_by',
+            'id', 'title', 'description', 'amount', 'currency', 'currency_id',
+            'expense_date', 'date', 'category', 'category_id', 
+            'group', 'group_id', 'paid_by', 'created_by',
             'receipt', 'receipt_image', 'tags', 'tag_ids',
             'is_settled', 'shares', 'shares_data',
             'comments_count', 'total_shares', 'created_at', 'updated_at'
@@ -120,92 +146,90 @@ class ExpenseSerializer(serializers.ModelSerializer):
         if 'date' in data and 'expense_date' not in data:
             data['expense_date'] = data['date']
         
-        # Handle integer IDs - try to convert them to UUIDs by looking up objects
-        # Currency: if integer, try to get by index or use default
-        if 'currency' in data:
-            currency_value = data['currency']
-            if isinstance(currency_value, (int, float)) or (isinstance(currency_value, str) and currency_value.isdigit()):
+        # Map 'currency' to 'currency_id' for backward compatibility
+        if 'currency' in data and 'currency_id' not in data:
+            data['currency_id'] = data.pop('currency')
+        
+        # Map 'group' to 'group_id' for backward compatibility  
+        if 'group' in data and 'group_id' not in data:
+            data['group_id'] = data.pop('group')
+        
+        # Handle currency_id - convert integer to Currency lookup
+        if 'currency_id' in data:
+            currency_value = data['currency_id']
+            if isinstance(currency_value, (int, float)) or (isinstance(currency_value, str) and str(currency_value).isdigit()):
                 try:
                     from apps.core.models import Currency
-                    currencies = list(Currency.objects.filter(is_active=True).order_by('code'))
-                    idx = int(currency_value) - 1  # Convert 1-based to 0-based index
-                    if 0 <= idx < len(currencies):
-                        data['currency'] = str(currencies[idx].id)
+                    # Treat as actual ID, not index
+                    currency_id = int(currency_value)
+                    currency = Currency.objects.filter(id=currency_id, is_active=True).first()
+                    if currency:
+                        data['currency_id'] = currency.id
                     else:
                         # Use default USD or first available
                         default = Currency.objects.filter(code='USD', is_active=True).first()
                         if default:
-                            data['currency'] = str(default.id)
-                        elif currencies:
-                            data['currency'] = str(currencies[0].id)
+                            data['currency_id'] = default.id
                         else:
-                            # No currencies available - will fail validation with clear message
-                            data['currency'] = None
-                except (IndexError, AttributeError, ValueError, TypeError) as e:
+                            first_currency = Currency.objects.filter(is_active=True).first()
+                            data['currency_id'] = first_currency.id if first_currency else None
+                except (ValueError, TypeError) as e:
                     # If lookup fails, try to use default
                     try:
                         from apps.core.models import Currency
                         default = Currency.objects.filter(code='USD', is_active=True).first()
                         if default:
-                            data['currency'] = str(default.id)
+                            data['currency_id'] = default.id
                         else:
-                            data['currency'] = str(Currency.objects.filter(is_active=True).first().id) if Currency.objects.filter(is_active=True).exists() else None
+                            first_currency = Currency.objects.filter(is_active=True).first()
+                            data['currency_id'] = first_currency.id if first_currency else None
                     except:
-                        data['currency'] = None
+                        data['currency_id'] = None
         
-        # Category: if integer, try to get by index
+        # Category: handle numeric ID (integer primary key, not UUID)
         if 'category_id' in data:
             category_value = data['category_id']
             # Handle None, empty string, or falsy values - set to None to allow clearing
             if not category_value or (isinstance(category_value, str) and not category_value.strip()):
                 data['category_id'] = None
-            # Handle both integer and string numeric values (legacy support)
+            # Handle both integer and string numeric values - these are ACTUAL IDs, not indices
             elif isinstance(category_value, (int, float)) or (isinstance(category_value, str) and str(category_value).strip().isdigit()):
                 try:
                     from apps.core.models import Category
-                    categories = list(Category.objects.all().order_by('name'))
-                    idx = int(category_value) - 1  # Convert 1-based to 0-based index
-                    if categories and 0 <= idx < len(categories):
-                        data['category_id'] = str(categories[idx].id)
-                    elif categories:
-                        # Index out of range - remove category_id (it's optional)
-                        data['category_id'] = None
-                    else:
-                        # No categories available - remove category_id
-                        data['category_id'] = None
-                except (IndexError, AttributeError, ValueError, TypeError) as e:
-                    # If lookup fails, remove category_id (it's optional)
                     import logging
                     logger = logging.getLogger(__name__)
-                    logger.warning(f"Failed to convert category_id {category_value}: {e}")
-                    data['category_id'] = None
-            # If it's already a UUID string, keep it as is (no conversion needed)
-            # The serializer field will validate it's a valid UUID
-        
-        # Group: if string '1' or integer, try to get by index
-        if 'group' in data:
-            group_value = data['group']
-            if isinstance(group_value, (int, float)) or (isinstance(group_value, str) and group_value.isdigit()):
-                try:
-                    from apps.groups.models import Group
-                    # Get user's groups
-                    from django.contrib.auth import get_user_model
-                    User = get_user_model()
-                    request = self.context.get('request')
-                    if request and request.user:
-                        groups = list(Group.objects.filter(
-                            memberships__user=request.user,
-                            memberships__is_active=True
-                        ).distinct().order_by('name'))
-                        idx = int(group_value) - 1
-                        if 0 <= idx < len(groups):
-                            data['group'] = str(groups[idx].id)
-                        else:
-                            data.pop('group', None)
+                    
+                    # Treat the value as actual database ID (not index)
+                    category_id = int(category_value)
+                    logger.info(f"Looking up category by ID: {category_id}")
+                    
+                    category = Category.objects.filter(id=category_id).first()
+                    if category:
+                        # Category uses integer primary key, so keep as integer
+                        data['category_id'] = category_id
+                        logger.info(f"Found category: {category.name} (id: {category.id})")
                     else:
-                        data.pop('group', None)
-                except (IndexError, AttributeError, ValueError):
-                    data.pop('group', None)
+                        # Category not found - log and set to None
+                        logger.warning(f"Category with id={category_id} not found")
+                        data['category_id'] = None
+                except (ValueError, TypeError) as e:
+                    # If conversion fails, set to None (category is optional)
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f"Failed to parse category_id {category_value}: {e}")
+                    data['category_id'] = None
+            # If it's already a string but not numeric, keep it as is
+        
+        # Group: validate group_id is a valid UUID (groups use UUID primary key)
+        if 'group_id' in data:
+            group_value = data['group_id']
+            # Handle empty/null values
+            if not group_value or (isinstance(group_value, str) and not group_value.strip()):
+                data['group_id'] = None
+            # Group uses UUID, so just validate the UUID is valid
+            elif isinstance(group_value, str) and group_value.strip():
+                # Keep the UUID string as-is, the serializer will validate it
+                data['group_id'] = group_value.strip()
         
         # Handle shares_data user_ids - convert integer user IDs
         if 'shares_data' in data:
@@ -279,49 +303,35 @@ class ExpenseSerializer(serializers.ModelSerializer):
                 from django.utils import timezone
                 validated_data['expense_date'] = timezone.now().date()
         
-        # Set category if provided
-        if category_id:
+        # Set category if provided - category uses integer primary key
+        if category_id is not None:
             try:
-                # category_id should be a UUID string after to_internal_value conversion
-                # But handle both UUID string and integer (fallback in case conversion didn't work)
-                if isinstance(category_id, (int, float)) or (isinstance(category_id, str) and str(category_id).strip().isdigit()):
-                    # Still an integer or numeric string - try to convert by index (fallback)
-                    from apps.core.models import Category
-                    categories = list(Category.objects.all().order_by('name'))
-                    idx = int(category_id) - 1
-                    if categories and 0 <= idx < len(categories):
-                        validated_data['category'] = categories[idx]
-                    # If index is invalid, category is optional so just skip it
-                else:
-                    # Should be a UUID string - try to get the category
-                    try:
-                        validated_data['category'] = Category.objects.get(id=category_id)
-                    except (Category.DoesNotExist, ValueError):
-                        # Invalid UUID or category doesn't exist - category is optional, skip it
-                        pass
-            except (ValueError, TypeError, IndexError, AttributeError):
-                # Category is optional, so if lookup fails, just skip it
-                pass
+                from apps.core.models import Category
+                import logging
+                logger = logging.getLogger(__name__)
+                
+                # category_id should be an integer ID after to_internal_value conversion
+                cat_id = int(category_id) if isinstance(category_id, (int, float, str)) and str(category_id).strip() else None
+                
+                if cat_id:
+                    logger.info(f"Creating expense with category_id: {cat_id}")
+                    category = Category.objects.filter(id=cat_id).first()
+                    if category:
+                        validated_data['category'] = category
+                        logger.info(f"Set category to: {category.name}")
+                    else:
+                        logger.warning(f"Category with id={cat_id} not found during create")
+            except (ValueError, TypeError) as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Failed to set category from category_id={category_id}: {e}")
         
         # Ensure currency is set (required field)
-        # If currency is provided as UUID string, convert it
+        # The PrimaryKeyRelatedField with source='currency' should have already set this
         currency_value = validated_data.get('currency')
-        if currency_value and isinstance(currency_value, str) and currency_value.strip():
-            # Only try to get currency if it's a non-empty string
+        if not currency_value:
+            # Currency is missing - use default
             from apps.core.models import Currency
-            try:
-                validated_data['currency'] = Currency.objects.get(id=currency_value)
-            except (Currency.DoesNotExist, ValueError):
-                # Fallback to default currency if UUID is invalid or currency doesn't exist
-                default_currency = Currency.objects.filter(code='USD').first() or Currency.objects.first()
-                if default_currency:
-                    validated_data['currency'] = default_currency
-                else:
-                    raise serializers.ValidationError("Currency is required and no default currency found")
-        elif not currency_value or (isinstance(currency_value, str) and not currency_value.strip()):
-            # Currency is missing, None, or empty string - use default
-            from apps.core.models import Currency
-            # Get default currency (USD) or first available
             default_currency = Currency.objects.filter(code='USD').first() or Currency.objects.first()
             if default_currency:
                 validated_data['currency'] = default_currency
@@ -410,7 +420,7 @@ class ExpenseSerializer(serializers.ModelSerializer):
             else:
                 validated_data['expense_type'] = 'personal'
         
-        # Update category - handle both setting and clearing
+        # Update category - handle both setting and clearing (category uses integer primary key)
         import logging
         logger = logging.getLogger(__name__)
         
@@ -418,15 +428,22 @@ class ExpenseSerializer(serializers.ModelSerializer):
             # category_id is explicitly provided (could be empty string to clear)
             logger.info(f"Updating expense category: category_id={category_id}, type={type(category_id)}")
             if category_id and str(category_id).strip():
-                # Non-empty category_id - try to get the category
+                # Non-empty category_id - try to get the category by integer ID
                 try:
-                    category = Category.objects.get(id=category_id)
-                    validated_data['category'] = category
-                    logger.info(f"Successfully set category to: {category.name} (id: {category.id})")
-                except (Category.DoesNotExist, ValueError, TypeError) as e:
+                    cat_id = int(category_id) if isinstance(category_id, (int, float, str)) else None
+                    if cat_id:
+                        category = Category.objects.filter(id=cat_id).first()
+                        if category:
+                            validated_data['category'] = category
+                            logger.info(f"Successfully set category to: {category.name} (id: {category.id})")
+                        else:
+                            logger.warning(f"Category with id={cat_id} not found in update")
+                            validated_data['category'] = None
+                    else:
+                        validated_data['category'] = None
+                except (ValueError, TypeError) as e:
                     # Invalid category_id - log warning but don't fail (category is optional)
                     logger.warning(f"Invalid category_id {category_id} in update: {e}")
-                    # Don't set category if lookup fails - keep existing or set to None
                     validated_data['category'] = None
             else:
                 # Empty string or None - clear the category
