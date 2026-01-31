@@ -77,6 +77,7 @@ class CurrencySimpleSerializer(serializers.ModelSerializer):
 
 class ExpenseSerializer(serializers.ModelSerializer):
     paid_by = UserSimpleSerializer(read_only=True)
+    paid_by_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)  # Write field for paid_by
     created_by = serializers.SerializerMethodField()  # Alias for paid_by for backward compatibility
     category = CategorySerializer(read_only=True)
     category_id = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
@@ -121,13 +122,13 @@ class ExpenseSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'description', 'amount', 'currency', 'currency_id',
             'expense_date', 'date', 'category', 'category_id', 
-            'group', 'group_id', 'paid_by', 'created_by',
+            'group', 'group_id', 'paid_by', 'paid_by_id', 'created_by',
             'receipt', 'receipt_image', 'tags', 'tag_ids',
             'is_settled', 'shares', 'shares_data',
             'comments_count', 'total_shares', 'created_at', 'updated_at'
         ]
         read_only_fields = [
-            'id', 'paid_by', 'created_at', 'updated_at', 
+            'id', 'created_at', 'updated_at', 
             'comments_count', 'total_shares'
         ]
     
@@ -153,6 +154,44 @@ class ExpenseSerializer(serializers.ModelSerializer):
         # Map 'group' to 'group_id' for backward compatibility  
         if 'group' in data and 'group_id' not in data:
             data['group_id'] = data.pop('group')
+        
+        # Helper function to extract ID from various formats (dict, string, etc.)
+        def extract_id(value, field_name=''):
+            import logging
+            logger = logging.getLogger(__name__)
+            
+            if value is None:
+                return None
+            
+            # If it's a dict, extract the 'id' key
+            if isinstance(value, dict):
+                logger.info(f"Extracting ID from dict for {field_name}: {value}")
+                return value.get('id')
+            
+            # If it's a string that looks like a dict representation, try to parse it
+            if isinstance(value, str):
+                value = value.strip()
+                # Check if it's a stringified dict like "{'id': '...', 'name': '...'}"
+                if value.startswith('{') and value.endswith('}'):
+                    try:
+                        import ast
+                        parsed = ast.literal_eval(value)
+                        if isinstance(parsed, dict) and 'id' in parsed:
+                            logger.info(f"Parsed stringified dict for {field_name}: {parsed['id']}")
+                            return parsed['id']
+                    except (ValueError, SyntaxError) as e:
+                        logger.warning(f"Failed to parse stringified dict for {field_name}: {e}")
+                        pass
+                return value
+            
+            # Return as-is for numbers and other types
+            return value
+        
+        # Extract IDs if values are objects
+        if 'currency_id' in data:
+            data['currency_id'] = extract_id(data['currency_id'], 'currency_id')
+        if 'group_id' in data:
+            data['group_id'] = extract_id(data['group_id'], 'group_id')
         
         # Handle currency_id - convert integer to Currency lookup
         if 'currency_id' in data:
@@ -338,6 +377,17 @@ class ExpenseSerializer(serializers.ModelSerializer):
             else:
                 raise serializers.ValidationError("Currency is required and no default currency found. Please run: python manage.py seed_currencies")
         
+        # Handle paid_by_id - set the payer
+        paid_by_id = validated_data.pop('paid_by_id', None)
+        if paid_by_id:
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            try:
+                payer = User.objects.get(id=paid_by_id)
+                validated_data['paid_by'] = payer
+            except User.DoesNotExist:
+                pass  # Will fall back to request user in perform_create
+        
         # Ensure JSON fields have default values if not provided (required by model validation)
         # These fields cannot be blank, so we always set them to empty dict/list if not provided
         validated_data.setdefault('split_data', {})
@@ -412,6 +462,20 @@ class ExpenseSerializer(serializers.ModelSerializer):
         tag_ids = validated_data.pop('tag_ids', None)
         shares_data = validated_data.pop('shares_data', None)
         category_id = validated_data.pop('category_id', None)
+        paid_by_id = validated_data.pop('paid_by_id', None)
+        
+        # Handle paid_by_id - update the payer
+        if paid_by_id is not None:
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            import logging
+            logger = logging.getLogger(__name__)
+            try:
+                payer = User.objects.get(id=paid_by_id)
+                validated_data['paid_by'] = payer
+                logger.info(f"Updated paid_by to: {payer.get_full_name()} (id: {payer.id})")
+            except User.DoesNotExist:
+                logger.warning(f"User with id={paid_by_id} not found for paid_by")
         
         # Set expense_type based on whether group is provided
         if 'group' in validated_data:
@@ -479,6 +543,9 @@ class ExpenseSerializer(serializers.ModelSerializer):
                         currency=instance.currency,
                         paid_by=instance.paid_by
                     )
+        elif paid_by_id is not None:
+            # If paid_by changed but shares weren't provided, update existing shares' paid_by
+            instance.shares.update(paid_by=instance.paid_by)
         
         return instance
 

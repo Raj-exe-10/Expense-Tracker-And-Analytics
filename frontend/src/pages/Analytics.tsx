@@ -161,16 +161,7 @@ const Analytics: React.FC = () => {
   }, [monthlyTrends, expenses]);
   
   const categoryData = useMemo(() => {
-    if (categoryBreakdown.length > 0) {
-      return categoryBreakdown.map(cat => ({
-        name: cat.category_name || cat.category?.name || 'Other',
-        value: Number(cat.amount || cat.total_amount || cat.value || 0),
-        percentage: Number(cat.percentage || 0),
-        color: cat.color || COLORS[Math.floor(Math.random() * COLORS.length)],
-      }));
-    }
-    
-    // Fallback: calculate from expenses
+    // Always calculate from actual expenses for accuracy
     if (expenses.length > 0) {
       const categoryTotals: { [key: string]: number } = {};
       expenses.forEach(exp => {
@@ -178,16 +169,64 @@ const Analytics: React.FC = () => {
         categoryTotals[catName] = (categoryTotals[catName] || 0) + Number(exp.amount || 0);
       });
       const total = Object.values(categoryTotals).reduce((a, b) => a + b, 0);
-      return Object.entries(categoryTotals).map(([name, value], index) => ({
-        name,
-        value,
-        percentage: total > 0 ? Math.round((value / total) * 100) : 0,
-        color: COLORS[index % COLORS.length],
-      }));
+      return Object.entries(categoryTotals)
+        .map(([name, value], index) => ({
+          name,
+          value,
+          percentage: total > 0 ? Number(((value / total) * 100).toFixed(2)) : 0,
+          color: COLORS[index % COLORS.length],
+        }))
+        .sort((a, b) => b.value - a.value); // Sort by value descending
+    }
+    
+    // Fallback to API data if no expenses
+    if (categoryBreakdown.length > 0) {
+      const total = categoryBreakdown.reduce((sum, cat) => 
+        sum + Number(cat.amount || cat.total_amount || cat.value || 0), 0);
+      return categoryBreakdown.map((cat, index) => {
+        const value = Number(cat.amount || cat.total_amount || cat.value || 0);
+        return {
+          name: cat.category_name || cat.category?.name || 'Other',
+          value,
+          percentage: total > 0 ? Number(((value / total) * 100).toFixed(2)) : 0,
+          color: cat.color || COLORS[index % COLORS.length],
+        };
+      }).sort((a, b) => b.value - a.value);
     }
     
     return [];
   }, [categoryBreakdown, expenses]);
+  
+  // Calculate daily spending insights from actual expenses
+  const dailyInsights = useMemo(() => {
+    if (expenses.length === 0) {
+      return { highestDay: 0, lowestDay: 0, highestDate: '', lowestDate: '' };
+    }
+    
+    const dailyTotals: { [key: string]: number } = {};
+    expenses.forEach(exp => {
+      const date = exp.expense_date || exp.date || '';
+      if (date) {
+        dailyTotals[date] = (dailyTotals[date] || 0) + Number(exp.amount || 0);
+      }
+    });
+    
+    const dailyAmounts = Object.entries(dailyTotals);
+    if (dailyAmounts.length === 0) {
+      return { highestDay: 0, lowestDay: 0, highestDate: '', lowestDate: '' };
+    }
+    
+    const sortedByAmount = [...dailyAmounts].sort((a, b) => b[1] - a[1]);
+    const highestEntry = sortedByAmount[0];
+    const lowestEntry = sortedByAmount[sortedByAmount.length - 1];
+    
+    return {
+      highestDay: highestEntry[1],
+      lowestDay: lowestEntry[1],
+      highestDate: highestEntry[0],
+      lowestDate: lowestEntry[0],
+    };
+  }, [expenses]);
 
   // Get top expenses from actual data
   const topExpenses = useMemo(() => {
@@ -528,7 +567,7 @@ const Analytics: React.FC = () => {
             value={categoryData[0]?.name || 'N/A'}
             icon={<Category />}
             color={theme.palette.warning.main}
-            subtitle={categoryData[0] ? `$${categoryData[0].value.toFixed(2)} (${categoryData[0].percentage}%)` : ''}
+            subtitle={categoryData[0] ? `$${categoryData[0].value.toFixed(2)} (${categoryData[0].percentage.toFixed(2)}%)` : ''}
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
@@ -629,7 +668,7 @@ const Analytics: React.FC = () => {
                             <Typography variant="body2">{cat.name}</Typography>
                           </Box>
                           <Typography variant="body2" fontWeight={600}>
-                            ${cat.value.toFixed(2)} ({cat.percentage}%)
+                            ${cat.value.toFixed(2)} ({cat.percentage.toFixed(2)}%)
                           </Typography>
                         </Box>
                       ))}
@@ -699,7 +738,7 @@ const Analytics: React.FC = () => {
                     <Paper sx={{ p: 2, bgcolor: 'primary.light', color: 'primary.contrastText' }}>
                       <Typography variant="body2">Highest Day</Typography>
                       <Typography variant="h5" fontWeight={600}>
-                        ${Math.max(...expenseTrendData.map(d => d.amount), 0).toFixed(0)}
+                        ${dailyInsights.highestDay.toFixed(2)}
                       </Typography>
                     </Paper>
                   </Grid>
@@ -707,10 +746,7 @@ const Analytics: React.FC = () => {
                     <Paper sx={{ p: 2, bgcolor: 'success.light', color: 'success.contrastText' }}>
                       <Typography variant="body2">Lowest Day</Typography>
                       <Typography variant="h5" fontWeight={600}>
-                        ${expenseTrendData.length > 0 
-                          ? Math.min(...expenseTrendData.filter(d => d.amount > 0).map(d => d.amount)).toFixed(0)
-                          : '0'
-                        }
+                        ${dailyInsights.lowestDay.toFixed(2)}
                       </Typography>
                     </Paper>
                   </Grid>
@@ -818,12 +854,12 @@ const Analytics: React.FC = () => {
                           {cat.name}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
-                          ${cat.value.toFixed(2)} ({cat.percentage}%)
+                          ${cat.value.toFixed(2)} ({cat.percentage.toFixed(2)}%)
                         </Typography>
                       </Box>
                       <LinearProgress 
                         variant="determinate" 
-                        value={cat.percentage} 
+                        value={Math.min(cat.percentage, 100)} 
                         sx={{ 
                           height: 8, 
                           borderRadius: 4,
@@ -907,7 +943,7 @@ const Analytics: React.FC = () => {
                           secondary={`$${category.value.toFixed(2)}`}
                         />
                         <Chip 
-                          label={`${category.percentage}%`} 
+                          label={`${category.percentage.toFixed(2)}%`} 
                           size="small"
                           sx={{ 
                             bgcolor: COLORS[index % COLORS.length],

@@ -217,7 +217,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
   }, [currenciesArray, editMode, formData.currency_id]);
 
   // Load group members when group is selected
-  const loadGroupMembers = useCallback(async (groupId: string) => {
+  const loadGroupMembers = useCallback(async (groupId: string, preservePaidBy: boolean = false) => {
     if (!groupId) {
       setGroupMembers([]);
       setShares([]);
@@ -248,12 +248,15 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
         setShares(newShares);
         setShowSplitOptions(true);
         
-        // Set paidBy to current user if they're in the group
-        const currentUserMember = members.find((m: GroupMember) => 
-          String(m.user.id) === String(currentUser?.id)
-        );
-        if (currentUserMember) {
-          setPaidBy(String(currentUserMember.user.id));
+        // Only set paidBy to current user if NOT preserving existing paidBy
+        // (i.e., only on new expense creation or group change, not on edit mode initial load)
+        if (!preservePaidBy) {
+          const currentUserMember = members.find((m: GroupMember) => 
+            String(m.user.id) === String(currentUser?.id)
+          );
+          if (currentUserMember) {
+            setPaidBy(String(currentUserMember.user.id));
+          }
         }
       }
     } catch (error) {
@@ -264,12 +267,20 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
     }
   }, [formData.amount, currentUser?.id]);
 
+  // Track if we've done the initial load in edit mode
+  const [initialEditLoadDone, setInitialEditLoadDone] = useState(false);
+
   // Load group members when group_id changes or in edit mode
   useEffect(() => {
     if (formData.group_id && !showSplitOptions && groupMembers.length === 0 && !loadingMembers) {
-      loadGroupMembers(formData.group_id);
+      // In edit mode, preserve the existing paidBy for initial load
+      const shouldPreservePaidBy = editMode && !initialEditLoadDone && !!paidBy;
+      loadGroupMembers(formData.group_id, shouldPreservePaidBy);
+      if (editMode && !initialEditLoadDone) {
+        setInitialEditLoadDone(true);
+      }
     }
-  }, [formData.group_id, showSplitOptions, groupMembers.length, loadingMembers, loadGroupMembers]);
+  }, [formData.group_id, showSplitOptions, groupMembers.length, loadingMembers, loadGroupMembers, editMode, initialEditLoadDone, paidBy]);
 
   // Recalculate shares when amount changes
   useEffect(() => {
@@ -398,6 +409,17 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
       newErrors.currency_id = 'Currency is required';
     }
     
+    // Validate date - must not be in the future
+    if (!formData.date) {
+      newErrors.date = 'Date is required';
+    } else {
+      const today = new Date();
+      today.setHours(23, 59, 59, 999); // End of today
+      if (formData.date > today) {
+        newErrors.date = 'Date cannot be in the future';
+      }
+    }
+    
     // Group is mandatory
     if (!formData.group_id) {
       newErrors.group_id = 'Please select a group for this expense';
@@ -440,18 +462,50 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
     
     const title = sanitizeInput((formData.title?.trim() || formData.description?.trim() || 'Untitled Expense').trim());
     
+    // Extract IDs - handle both string IDs and object formats
+    const getCurrencyId = () => {
+      const val = formData.currency_id;
+      if (!val) return null;
+      if (typeof val === 'object' && val !== null) {
+        return (val as any).id || null;
+      }
+      return val;
+    };
+    
+    const getGroupId = () => {
+      const val = formData.group_id;
+      if (!val) return null;
+      if (typeof val === 'object' && val !== null) {
+        return (val as any).id || null;
+      }
+      return val;
+    };
+    
+    const getCategoryId = () => {
+      const val = formData.category_id;
+      if (!val) return null;
+      if (typeof val === 'object' && val !== null) {
+        return (val as any).id || null;
+      }
+      return val;
+    };
+    
     const expenseData: any = {
       title: title,
       description: sanitizeInput(formData.description?.trim() || formData.notes?.trim() || ''),
       amount: parseFloat(formData.amount),
       date: formData.date.toISOString().split('T')[0],
-      currency: formData.currency_id,
+      currency: getCurrencyId(),
     };
     
-    expenseData.category_id = formData.category_id || null;
+    const categoryId = getCategoryId();
+    if (categoryId) {
+      expenseData.category_id = categoryId;
+    }
     
-    if (formData.group_id) {
-      expenseData.group = formData.group_id;
+    const groupId = getGroupId();
+    if (groupId) {
+      expenseData.group = groupId;
     }
     
     if (paidBy) {
@@ -640,12 +694,31 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
                     {/* Date & Category */}
                     <Grid item xs={12} sm={6}>
                       <DatePicker
-                        label="Date"
+                        label="Date *"
                         value={formData.date}
-                        onChange={(newValue) => newValue && setFormData(prev => ({ ...prev, date: newValue }))}
+                        onChange={(newValue) => {
+                          if (newValue) {
+                            setFormData(prev => ({ ...prev, date: newValue }));
+                            // Clear date error when valid date is selected
+                            if (errors.date) {
+                              setErrors((prev: any) => ({ ...prev, date: undefined }));
+                            }
+                          }
+                        }}
+                        maxDate={new Date()}
+                        disableFuture
                         slotProps={{
                           textField: {
                             fullWidth: true,
+                            error: !!errors.date,
+                            helperText: errors.date || 'Expense date (past dates only)',
+                            InputProps: {
+                              startAdornment: (
+                                <InputAdornment position="start">
+                                  <CalendarToday color={errors.date ? 'error' : 'action'} />
+                                </InputAdornment>
+                              ),
+                            },
                           },
                         }}
                       />

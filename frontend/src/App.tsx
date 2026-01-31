@@ -30,6 +30,7 @@ import Settings from './pages/Settings';
 import Settlements from './pages/Settlements';
 import Profile from './pages/Profile';
 import HelpSupport from './pages/HelpSupport';
+import NotificationsPage from './pages/Notifications';
 // Auth wrapper component
 interface AuthWrapperProps {
   children: React.ReactNode;
@@ -275,6 +276,17 @@ function App() {
               <AuthWrapper>
                 <DashboardLayout>
                   <Settings />
+                </DashboardLayout>
+              </AuthWrapper>
+            }
+          />
+          
+          <Route
+            path="/notifications"
+            element={
+              <AuthWrapper>
+                <DashboardLayout>
+                  <NotificationsPage />
                 </DashboardLayout>
               </AuthWrapper>
             }

@@ -100,10 +100,16 @@ class NotificationService:
     
     @classmethod
     def notify_expense_updated(cls, expense, updater):
-        """Notify relevant users when an expense is updated"""
+        """
+        Notify relevant users when an expense is updated.
+        - For group expenses: notify all group members except the updater
+        - For personal expenses with shares: notify users in shares
+        """
         notifications = []
+        notified_user_ids = set()  # Track who we've already notified
         
         if expense.group:
+            # Notify all group members except the updater
             from apps.groups.models import GroupMembership
             memberships = GroupMembership.objects.filter(
                 group=expense.group,
@@ -111,6 +117,10 @@ class NotificationService:
             ).exclude(user=updater).select_related('user')
             
             for membership in memberships:
+                if membership.user.id in notified_user_ids:
+                    continue
+                notified_user_ids.add(membership.user.id)
+                
                 notification = cls.create_notification(
                     user=membership.user,
                     notification_type='expense_updated',
@@ -120,8 +130,44 @@ class NotificationService:
                     related_object_type='expense',
                     related_object_id=expense.id,
                     action_url=f'/expenses/{expense.id}',
+                    metadata={
+                        'expense_id': str(expense.id),
+                        'group_id': str(expense.group.id),
+                        'amount': float(expense.amount),
+                        'currency': expense.currency.code if expense.currency else 'USD',
+                    }
                 )
                 notifications.append(notification)
+        
+        # Also notify users in expense shares (for both group and personal expenses)
+        from apps.expenses.models import ExpenseShare
+        shares = ExpenseShare.objects.filter(
+            expense=expense
+        ).exclude(user=updater).select_related('user')
+        
+        for share in shares:
+            # Don't notify if already notified as group member
+            if share.user.id in notified_user_ids:
+                continue
+            notified_user_ids.add(share.user.id)
+            
+            notification = cls.create_notification(
+                user=share.user,
+                notification_type='expense_updated',
+                title='Shared Expense Updated',
+                message=f'{updater.get_full_name() or updater.username} updated "{expense.title or expense.description}" (${expense.amount:.2f}). Your share: ${share.amount:.2f}',
+                sender=updater,
+                related_object_type='expense',
+                related_object_id=expense.id,
+                action_url=f'/expenses/{expense.id}',
+                metadata={
+                    'expense_id': str(expense.id),
+                    'amount': float(expense.amount),
+                    'share_amount': float(share.amount),
+                    'currency': expense.currency.code if expense.currency else 'USD',
+                }
+            )
+            notifications.append(notification)
         
         return notifications
     

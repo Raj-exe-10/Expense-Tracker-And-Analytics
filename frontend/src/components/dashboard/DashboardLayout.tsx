@@ -500,7 +500,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
         )}
         
         <Divider />
-        <MenuItem onClick={() => { handleNotificationClose(); navigate('/settings'); }} sx={{ justifyContent: 'center' }}>
+        <MenuItem onClick={() => { handleNotificationClose(); navigate('/notifications'); }} sx={{ justifyContent: 'center' }}>
           <Typography variant="body2" color="primary">
             View All Notifications
           </Typography>

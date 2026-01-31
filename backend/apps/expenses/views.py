@@ -58,9 +58,11 @@ class ExpenseViewSet(ExpenseFilterMixin, viewsets.ModelViewSet):
         # Create notifications for relevant users
         try:
             from apps.notifications.services import NotificationService
-            NotificationService.notify_expense_added(expense, self.request.user)
+            logger.info(f"Creating notifications for new expense {expense.id} by user {self.request.user.id}")
+            notifications = NotificationService.notify_expense_added(expense, self.request.user)
+            logger.info(f"Created {len(notifications)} notifications for expense {expense.id}")
         except Exception as e:
-            logger.warning(f"Failed to create expense notifications: {e}")
+            logger.error(f"Failed to create expense notifications: {e}", exc_info=True)
     
     def perform_update(self, serializer):
         expense = serializer.save()
@@ -75,9 +77,11 @@ class ExpenseViewSet(ExpenseFilterMixin, viewsets.ModelViewSet):
         # Create notifications for relevant users
         try:
             from apps.notifications.services import NotificationService
-            NotificationService.notify_expense_updated(expense, self.request.user)
+            logger.info(f"Creating update notifications for expense {expense.id} by user {self.request.user.id}")
+            notifications = NotificationService.notify_expense_updated(expense, self.request.user)
+            logger.info(f"Created {len(notifications)} update notifications for expense {expense.id}")
         except Exception as e:
-            logger.warning(f"Failed to create expense update notifications: {e}")
+            logger.error(f"Failed to create expense update notifications: {e}", exc_info=True)
     
     def perform_destroy(self, instance):
         # Store group reference before deleting

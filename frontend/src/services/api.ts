@@ -253,11 +253,32 @@ export const settlementsAPI = {
   completeSettlement: (id: string) =>
     api.post(`/payments/settlements/${id}/complete/`).then(res => res.data),
   
+  rejectSettlement: (id: string, reason?: string) =>
+    api.post(`/payments/settlements/${id}/reject/`, { reason }).then(res => res.data),
+  
+  sendSettlementReminder: (id: string) =>
+    api.post(`/payments/settlements/${id}/send_reminder/`).then(res => res.data),
+  
   getUserBalances: (params?: any) =>
     api.get('/payments/balances/', { params }).then(res => res.data),
   
   getGroupBalances: (groupId: string) =>
     api.get(`/payments/groups/${groupId}/balances/`).then(res => res.data),
+  
+  quickSettle: (data: { payee_id: string; amount: number; payment_method?: string; note?: string; group_id?: string; complete_immediately?: boolean }) =>
+    api.post('/payments/quick-settle/', data).then(res => res.data),
+  
+  sendReminder: (data: { to_user_id: string; amount?: number; message?: string }) =>
+    api.post('/payments/send-reminder/', data).then(res => res.data),
+  
+  getTransactionHistory: (params?: { status?: string; limit?: number }) =>
+    api.get('/payments/history/', { params }).then(res => res.data),
+  
+  getExpenseSettlements: (params?: { status?: string }) =>
+    api.get('/payments/expense-settlements/', { params }).then(res => res.data),
+  
+  settleExpenseShare: (shareId: string, data?: { payment_method?: string; note?: string }) =>
+    api.post(`/payments/expense-settlements/${shareId}/settle/`, data).then(res => res.data),
 };
 
 // Notifications API
@@ -276,6 +297,9 @@ export const notificationsAPI = {
   
   getUnreadCount: () =>
     api.get('/notifications/notifications/unread_count/').then(res => res.data),
+  
+  deleteNotification: (id: string) =>
+    api.delete(`/notifications/notifications/${id}/`).then(res => res.data),
   
   getPreferences: () =>
     api.get('/notifications/preferences/').then(res => res.data),
