@@ -15,6 +15,7 @@ class GroupSerializer(serializers.ModelSerializer):
     
     currency_details = CurrencySerializer(source='currency', read_only=True)
     member_count = serializers.IntegerField(read_only=True)
+    total_expenses = serializers.SerializerMethodField()
     user_role = serializers.SerializerMethodField()
     user_balance = serializers.SerializerMethodField()
     recent_activity = serializers.SerializerMethodField()
@@ -32,6 +33,16 @@ class GroupSerializer(serializers.ModelSerializer):
             'id', 'invite_code', 'member_count', 'total_expenses',
             'settled_amount', 'created_at', 'updated_at'
         ]
+    
+    def get_total_expenses(self, obj):
+        """Calculate total expenses for the group dynamically"""
+        from apps.expenses.models import Expense
+        from django.db.models import Sum
+        
+        total = Expense.objects.filter(
+            group=obj
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
+        return str(total)
     
     def get_user_role(self, obj):
         """Get current user's role in the group"""

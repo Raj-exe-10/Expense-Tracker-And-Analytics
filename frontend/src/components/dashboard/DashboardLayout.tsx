@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   AppBar,
@@ -17,11 +17,12 @@ import {
   Divider,
   useTheme,
   useMediaQuery,
-  Badge,
   Tooltip,
-  Button,
   Snackbar,
   Alert,
+  Badge,
+  CircularProgress,
+  Button,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -31,20 +32,40 @@ import {
   Analytics,
   AccountBalance,
   Settings,
-  Notifications,
   ExitToApp,
   Person,
   Help,
   ChevronLeft,
+  Notifications,
+  NotificationsActive,
+  Payment,
+  GroupAdd,
+  Info,
+  Schedule,
 } from '@mui/icons-material';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { AppDispatch, RootState } from '../../store';
 import { logout } from '../../store/slices/authSlice';
-import { useAppContext } from '../../context/AppContext';
+import { notificationsAPI } from '../../services/api';
+import { formatDistanceToNow } from 'date-fns';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
+}
+
+interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  notification_type: string;
+  is_read: boolean;
+  created_at: string;
+  sender?: {
+    first_name: string;
+    last_name: string;
+  };
+  priority: string;
 }
 
 const drawerWidth = 240;
@@ -75,6 +96,11 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
   const [notificationAnchor, setNotificationAnchor] = useState<null | HTMLElement>(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '' });
   
+  // Notification state
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [loadingNotifications, setLoadingNotifications] = useState(false);
+  
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const dispatch = useDispatch<AppDispatch>();
@@ -82,8 +108,30 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
   const location = useLocation();
   
   const { user } = useSelector((state: RootState) => state.auth);
-  const { notifications, markNotificationAsRead, markAllNotificationsAsRead } = useAppContext();
-  const unreadNotifications = notifications.filter(n => !n.read).length;
+
+  // Fetch notifications
+  const fetchNotifications = useCallback(async () => {
+    setLoadingNotifications(true);
+    try {
+      const [notifData, countData] = await Promise.all([
+        notificationsAPI.getNotifications({ limit: 10 }),
+        notificationsAPI.getUnreadCount(),
+      ]);
+      setNotifications(Array.isArray(notifData) ? notifData : notifData.results || []);
+      setUnreadCount(countData.count || 0);
+    } catch (error) {
+      console.error('Failed to load notifications:', error);
+    } finally {
+      setLoadingNotifications(false);
+    }
+  }, []);
+
+  // Fetch notifications on mount and periodically
+  useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 60000); // Refresh every minute
+    return () => clearInterval(interval);
+  }, [fetchNotifications]);
 
   const handleDrawerToggle = () => {
     setDrawerOpen(!drawerOpen);
@@ -99,37 +147,54 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
 
   const handleNotificationOpen = (event: React.MouseEvent<HTMLElement>) => {
     setNotificationAnchor(event.currentTarget);
+    fetchNotifications();
   };
 
   const handleNotificationClose = () => {
     setNotificationAnchor(null);
   };
 
-  const handleMarkAllRead = () => {
-    markAllNotificationsAsRead();
-    setSnackbar({ open: true, message: 'All notifications marked as read' });
+  const handleMarkAsRead = async (notificationId: string) => {
+    try {
+      await notificationsAPI.markAsRead(notificationId);
+      setNotifications(prev => 
+        prev.map(n => n.id === notificationId ? { ...n, is_read: true } : n)
+      );
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (error) {
+      console.error('Failed to mark notification as read:', error);
+    }
   };
 
-  const handleViewAllNotifications = () => {
-    navigate('/notifications');
-    handleNotificationClose();
+  const handleMarkAllAsRead = async () => {
+    try {
+      await notificationsAPI.markAllAsRead();
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+      setUnreadCount(0);
+      setSnackbar({ open: true, message: 'All notifications marked as read' });
+    } catch (error) {
+      console.error('Failed to mark all as read:', error);
+    }
   };
 
-  const handleNotificationClick = (notificationId: string, type: string) => {
-    markNotificationAsRead(notificationId);
-    handleNotificationClose();
-    
-    // Navigate based on notification type
-    switch(type) {
-      case 'expense':
-        navigate('/expenses');
-        break;
-      case 'group':
-        navigate('/groups');
-        break;
-      case 'settlement':
-        navigate('/settlements');
-        break;
+  const getNotificationIcon = (type: string) => {
+    switch (type) {
+      case 'expense_added':
+      case 'expense_updated':
+        return <Receipt fontSize="small" />;
+      case 'group_invitation':
+      case 'group_joined':
+        return <GroupAdd fontSize="small" />;
+      case 'payment_due':
+      case 'payment_received':
+        return <Payment fontSize="small" />;
+      case 'settlement_request':
+      case 'settlement_completed':
+        return <AccountBalance fontSize="small" />;
+      case 'reminder':
+        return <Schedule fontSize="small" />;
+      default:
+        return <Info fontSize="small" />;
     }
   };
 
@@ -277,14 +342,19 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
             {menuItems.find(item => isCurrentPath(item.path))?.text || 'Dashboard'}
           </Typography>
 
+          {/* Notifications Bell */}
           <Tooltip title="Notifications">
             <IconButton 
               color="inherit" 
-              sx={{ mr: 1 }}
               onClick={handleNotificationOpen}
+              sx={{ mr: 1 }}
             >
-              <Badge badgeContent={unreadNotifications} color="error">
-                <Notifications />
+              <Badge badgeContent={unreadCount} color="error" max={99}>
+                {unreadCount > 0 ? (
+                  <NotificationsActive color="primary" />
+                ) : (
+                  <Notifications />
+                )}
               </Badge>
             </IconButton>
           </Tooltip>
@@ -346,68 +416,93 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
         anchorEl={notificationAnchor}
         open={Boolean(notificationAnchor)}
         onClose={handleNotificationClose}
-        anchorOrigin={{
-          vertical: 'bottom',
-          horizontal: 'right',
-        }}
-        transformOrigin={{
-          vertical: 'top',
-          horizontal: 'right',
-        }}
         PaperProps={{
           sx: {
-            width: 360,
-            maxHeight: 400,
+            width: 380,
+            maxHeight: 500,
+            overflow: 'hidden',
           },
         }}
+        transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+        anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
       >
-        <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="h6">Notifications</Typography>
-          <Button size="small" onClick={handleMarkAllRead}>
-            Mark all as read
-          </Button>
+        <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="h6" fontWeight={600}>
+            Notifications
+          </Typography>
+          {unreadCount > 0 && (
+            <Button size="small" onClick={handleMarkAllAsRead}>
+              Mark all read
+            </Button>
+          )}
         </Box>
-        <Divider />
-        {notifications.length === 0 ? (
+        
+        {loadingNotifications ? (
           <Box sx={{ p: 3, textAlign: 'center' }}>
-            <Typography color="text.secondary">
-              No new notifications
-            </Typography>
+            <CircularProgress size={32} />
+          </Box>
+        ) : notifications.length === 0 ? (
+          <Box sx={{ p: 4, textAlign: 'center' }}>
+            <Notifications sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+            <Typography color="text.secondary">No notifications yet</Typography>
           </Box>
         ) : (
-          notifications.map((notification) => (
-            <MenuItem
-              key={notification.id}
-              onClick={() => handleNotificationClick(notification.id, notification.type)}
-              sx={{
-                py: 2,
-                backgroundColor: !notification.read ? 'action.hover' : 'transparent',
-                '&:hover': {
-                  backgroundColor: !notification.read ? 'action.selected' : 'action.hover',
-                },
-              }}
-            >
-              <ListItemIcon>
-                {notification.type === 'expense' && <Receipt />}
-                {notification.type === 'settlement' && <AccountBalance />}
-                {notification.type === 'group' && <Group />}
-              </ListItemIcon>
-              <Box sx={{ flex: 1 }}>
-                <Typography variant="subtitle2">{notification.title}</Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {notification.message}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {notification.time}
-                </Typography>
-              </Box>
-            </MenuItem>
-          ))
+          <List sx={{ maxHeight: 380, overflow: 'auto', p: 0 }}>
+            {notifications.map((notification) => (
+              <ListItem
+                key={notification.id}
+                sx={{
+                  bgcolor: notification.is_read ? 'transparent' : 'action.hover',
+                  borderBottom: 1,
+                  borderColor: 'divider',
+                  cursor: 'pointer',
+                  '&:hover': { bgcolor: 'action.selected' },
+                }}
+                onClick={() => !notification.is_read && handleMarkAsRead(notification.id)}
+                secondaryAction={
+                  !notification.is_read && (
+                    <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'primary.main' }} />
+                  )
+                }
+              >
+                <ListItemIcon sx={{ minWidth: 40 }}>
+                  <Avatar sx={{ 
+                    width: 32, 
+                    height: 32, 
+                    bgcolor: notification.priority === 'high' ? 'warning.main' : 'primary.main' 
+                  }}>
+                    {getNotificationIcon(notification.notification_type)}
+                  </Avatar>
+                </ListItemIcon>
+                <ListItemText
+                  primary={
+                    <Typography variant="body2" fontWeight={notification.is_read ? 400 : 600}>
+                      {notification.title}
+                    </Typography>
+                  }
+                  secondary={
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                        {notification.message}
+                      </Typography>
+                      <Typography variant="caption" color="text.disabled">
+                        {notification.created_at 
+                          ? formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })
+                          : 'Recently'
+                        }
+                      </Typography>
+                    </Box>
+                  }
+                />
+              </ListItem>
+            ))}
+          </List>
         )}
+        
         <Divider />
-        <MenuItem onClick={handleViewAllNotifications}>
-          <Typography variant="body2" sx={{ mx: 'auto' }}>
-            View all notifications
+        <MenuItem onClick={() => { handleNotificationClose(); navigate('/settings'); }} sx={{ justifyContent: 'center' }}>
+          <Typography variant="body2" color="primary">
+            View All Notifications
           </Typography>
         </MenuItem>
       </Menu>

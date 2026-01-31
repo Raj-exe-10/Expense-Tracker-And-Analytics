@@ -47,6 +47,51 @@ class ExpenseViewSet(ExpenseFilterMixin, viewsets.ModelViewSet):
         # The serializer's create method handles shares_data if provided
         if expense.group and not serializer.validated_data.get('shares_data'):
             self.create_equal_shares(expense)
+        
+        # Update group's total_expenses if this is a group expense
+        if expense.group:
+            try:
+                expense.group.update_total_expenses()
+            except Exception as e:
+                logger.warning(f"Failed to update group total expenses: {e}")
+        
+        # Create notifications for relevant users
+        try:
+            from apps.notifications.services import NotificationService
+            NotificationService.notify_expense_added(expense, self.request.user)
+        except Exception as e:
+            logger.warning(f"Failed to create expense notifications: {e}")
+    
+    def perform_update(self, serializer):
+        expense = serializer.save()
+        
+        # Update group's total_expenses if this is a group expense
+        if expense.group:
+            try:
+                expense.group.update_total_expenses()
+            except Exception as e:
+                logger.warning(f"Failed to update group total expenses: {e}")
+        
+        # Create notifications for relevant users
+        try:
+            from apps.notifications.services import NotificationService
+            NotificationService.notify_expense_updated(expense, self.request.user)
+        except Exception as e:
+            logger.warning(f"Failed to create expense update notifications: {e}")
+    
+    def perform_destroy(self, instance):
+        # Store group reference before deleting
+        group = instance.group
+        
+        # Delete the expense
+        instance.delete()
+        
+        # Update group's total_expenses if this was a group expense
+        if group:
+            try:
+                group.update_total_expenses()
+            except Exception as e:
+                logger.warning(f"Failed to update group total expenses after deletion: {e}")
     
     def create_equal_shares(self, expense):
         """Create equal shares for all group members"""

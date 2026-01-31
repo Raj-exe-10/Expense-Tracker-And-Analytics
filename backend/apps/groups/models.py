@@ -90,6 +90,20 @@ class Group(UUIDModel, TimeStampedModel):
         """Get all active members of the group"""
         return self.memberships.filter(is_active=True)
     
+    def update_total_expenses(self):
+        """Update the denormalized total_expenses field"""
+        from apps.expenses.models import Expense
+        from django.db.models import Sum
+        from decimal import Decimal
+        
+        total = Expense.objects.filter(
+            group=self
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
+        
+        self.total_expenses = total
+        self.save(update_fields=['total_expenses'])
+        return total
+    
     def calculate_balances(self):
         """Calculate balances for all group members"""
         from apps.expenses.models import ExpenseShare

@@ -24,6 +24,7 @@ import { Dashboard } from './pages/Dashboard';
 import Expenses from './pages/Expenses';
 import ExpenseDetail from './pages/ExpenseDetail';
 import Groups from './pages/Groups';
+import JoinGroup from './pages/JoinGroup';
 import Analytics from './pages/Analytics';
 import Settings from './pages/Settings';
 import Settlements from './pages/Settlements';
@@ -230,6 +231,17 @@ function App() {
               <AuthWrapper>
                 <DashboardLayout>
                   <Groups />
+                </DashboardLayout>
+              </AuthWrapper>
+            }
+          />
+          
+          <Route
+            path="/groups/join/:inviteCode"
+            element={
+              <AuthWrapper>
+                <DashboardLayout>
+                  <JoinGroup />
                 </DashboardLayout>
               </AuthWrapper>
             }

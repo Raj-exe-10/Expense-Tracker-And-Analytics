@@ -23,29 +23,45 @@ class GroupViewSet(viewsets.ModelViewSet):
     """
     serializer_class = GroupSerializer
     permission_classes = [IsAuthenticated]
-    
+    pagination_class = None  # Return all groups for filter dropdowns and list
+
     def get_queryset(self):
         return Group.objects.filter(
             memberships__user=self.request.user,
             memberships__is_active=True
+        ).select_related('currency').prefetch_related(
+            'memberships__user',
+            'activities'
         ).distinct()
     
+    def get_serializer_context(self):
+        """Ensure request is in serializer context"""
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+    
     def perform_create(self, serializer):
-        group = serializer.save(created_by=self.request.user)
+        group = serializer.save()
         
         # Add creator as admin member
         GroupMembership.objects.create(
             group=group,
             user=self.request.user,
             role='admin',
+            status='accepted',
+            is_active=True,
             joined_at=timezone.now()
         )
+        
+        # Update member count
+        group.member_count = 1
+        group.save(update_fields=['member_count'])
         
         # Log activity
         GroupActivity.objects.create(
             group=group,
             user=self.request.user,
-            activity_type='group_created',
+            activity_type='member_joined',
             description=f'Created group "{group.name}"'
         )
     
@@ -411,4 +427,300 @@ class GroupViewSet(viewsets.ModelViewSet):
         return Response({
             'message': f'Settled {count} expenses',
             'count': count
+        })
+    
+    @action(detail=False, methods=['get'])
+    def search_users(self, request):
+        """Search for users to add to a group"""
+        query = request.query_params.get('q', '').strip()
+        group_id = request.query_params.get('group_id')
+        
+        if len(query) < 2:
+            return Response([])
+        
+        # Search users by email, first name, or last name
+        users = User.objects.filter(
+            Q(email__icontains=query) |
+            Q(first_name__icontains=query) |
+            Q(last_name__icontains=query)
+        ).exclude(id=request.user.id)[:20]
+        
+        # If group_id provided, mark which users are already members
+        member_ids = set()
+        if group_id:
+            try:
+                member_ids = set(GroupMembership.objects.filter(
+                    group_id=group_id,
+                    is_active=True
+                ).values_list('user_id', flat=True))
+            except Exception:
+                pass
+        
+        result = []
+        for user in users:
+            result.append({
+                'id': str(user.id),
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'full_name': user.get_full_name() or user.email,
+                'is_member': user.id in member_ids
+            })
+        
+        return Response(result)
+    
+    @action(detail=True, methods=['post'])
+    def add_member(self, request, pk=None):
+        """Add an existing user as a member to the group"""
+        group = self.get_object()
+        
+        # Check if user is admin
+        if not GroupMembership.objects.filter(
+            group=group,
+            user=request.user,
+            role='admin',
+            is_active=True
+        ).exists():
+            return Response(
+                {'error': 'Only admins can add members'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        user_id = request.data.get('user_id')
+        role = request.data.get('role', 'member')
+        
+        if not user_id:
+            return Response(
+                {'error': 'User ID required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            user_to_add = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'User not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check if already a member
+        existing = GroupMembership.objects.filter(
+            group=group,
+            user=user_to_add
+        ).first()
+        
+        if existing:
+            if existing.is_active:
+                return Response(
+                    {'error': 'User is already a member of this group'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            # Reactivate membership
+            existing.is_active = True
+            existing.status = 'accepted'
+            existing.role = role
+            existing.joined_at = timezone.now()
+            existing.left_at = None
+            existing.save()
+            membership = existing
+        else:
+            # Create new membership
+            membership = GroupMembership.objects.create(
+                group=group,
+                user=user_to_add,
+                role=role,
+                status='accepted',
+                is_active=True,
+                invited_by=request.user,
+                joined_at=timezone.now()
+            )
+        
+        # Update member count
+        group.member_count = group.memberships.filter(is_active=True).count()
+        group.save(update_fields=['member_count'])
+        
+        # Log activity
+        GroupActivity.objects.create(
+            group=group,
+            user=request.user,
+            activity_type='member_joined',
+            description=f'Added {user_to_add.get_full_name() or user_to_add.email} to the group'
+        )
+        
+        # Create notifications
+        try:
+            from apps.notifications.services import NotificationService
+            NotificationService.notify_group_joined(group, user_to_add, added_by=request.user)
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Failed to create group join notifications: {e}")
+        
+        return Response({
+            'message': 'Member added successfully',
+            'membership': GroupMembershipSerializer(membership).data
+        })
+    
+    @action(detail=True, methods=['post'])
+    def remove_member(self, request, pk=None):
+        """Remove a member from the group"""
+        group = self.get_object()
+        
+        # Check if user is admin
+        if not GroupMembership.objects.filter(
+            group=group,
+            user=request.user,
+            role='admin',
+            is_active=True
+        ).exists():
+            return Response(
+                {'error': 'Only admins can remove members'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        user_id = request.data.get('user_id')
+        
+        if not user_id:
+            return Response(
+                {'error': 'User ID required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Cannot remove yourself
+        if str(user_id) == str(request.user.id):
+            return Response(
+                {'error': 'Cannot remove yourself. Use leave instead.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        membership = GroupMembership.objects.filter(
+            group=group,
+            user_id=user_id,
+            is_active=True
+        ).first()
+        
+        if not membership:
+            return Response(
+                {'error': 'User is not an active member of this group'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        user_name = membership.user.get_full_name() or membership.user.email
+        
+        # Deactivate membership
+        membership.is_active = False
+        membership.status = 'removed'
+        membership.left_at = timezone.now()
+        membership.save()
+        
+        # Update member count
+        group.member_count = group.memberships.filter(is_active=True).count()
+        group.save(update_fields=['member_count'])
+        
+        # Log activity
+        GroupActivity.objects.create(
+            group=group,
+            user=request.user,
+            activity_type='member_left',
+            description=f'Removed {user_name} from the group'
+        )
+        
+        return Response({'message': f'Removed {user_name} from the group'})
+    
+    @action(detail=True, methods=['get'])
+    def invite_link(self, request, pk=None):
+        """Get or regenerate invite link for the group"""
+        group = self.get_object()
+        
+        # Check if user is admin or member
+        membership = GroupMembership.objects.filter(
+            group=group,
+            user=request.user,
+            is_active=True
+        ).first()
+        
+        if not membership:
+            return Response(
+                {'error': 'You are not a member of this group'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        regenerate = request.query_params.get('regenerate', 'false').lower() == 'true'
+        
+        if regenerate and membership.role == 'admin':
+            group.invite_code = group.generate_invite_code()
+            group.save(update_fields=['invite_code'])
+        
+        # Build invite URL (frontend route)
+        invite_url = f"/groups/join/{group.invite_code}"
+        
+        return Response({
+            'invite_code': group.invite_code,
+            'invite_url': invite_url,
+            'group_name': group.name
+        })
+    
+    @action(detail=False, methods=['post'])
+    def join_by_code(self, request):
+        """Join a group using invite code"""
+        invite_code = request.data.get('invite_code', '').strip().upper()
+        
+        if not invite_code:
+            return Response(
+                {'error': 'Invite code required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            group = Group.objects.get(invite_code=invite_code, is_active=True)
+        except Group.DoesNotExist:
+            return Response(
+                {'error': 'Invalid invite code'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if already a member
+        existing = GroupMembership.objects.filter(
+            group=group,
+            user=request.user
+        ).first()
+        
+        if existing:
+            if existing.is_active:
+                return Response(
+                    {'error': 'You are already a member of this group'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            # Reactivate
+            existing.is_active = True
+            existing.status = 'accepted'
+            existing.joined_at = timezone.now()
+            existing.left_at = None
+            existing.save()
+            membership = existing
+        else:
+            membership = GroupMembership.objects.create(
+                group=group,
+                user=request.user,
+                role='member',
+                status='accepted',
+                is_active=True,
+                joined_at=timezone.now()
+            )
+        
+        # Update member count
+        group.member_count = group.memberships.filter(is_active=True).count()
+        group.save(update_fields=['member_count'])
+        
+        # Log activity
+        GroupActivity.objects.create(
+            group=group,
+            user=request.user,
+            activity_type='member_joined',
+            description=f'{request.user.get_full_name() or request.user.email} joined the group'
+        )
+        
+        return Response({
+            'message': 'Successfully joined the group',
+            'group': GroupSerializer(group, context={'request': request}).data
         })

@@ -53,17 +53,26 @@ class ExpenseFilterMixin:
     
     def apply_expense_filters(self, queryset, request):
         """Apply common filters to expense queryset"""
-        # Group filter
+        # Group filter (only when non-empty valid UUID - Group model uses UUID)
         group_id = request.query_params.get('group_id')
-        if group_id:
-            self.validate_uuid(group_id, 'group_id')
-            queryset = queryset.filter(group_id=group_id)
+        if group_id is not None and str(group_id).strip():
+            try:
+                # Validate UUID format before filtering
+                self.validate_uuid(str(group_id).strip(), 'group_id')
+                queryset = queryset.filter(group_id=group_id)
+            except ValidationError:
+                # If not a valid UUID, skip the filter (don't crash)
+                pass
         
-        # Category filter
+        # Category filter (Category uses integer ID, not UUID)
         category_id = request.query_params.get('category_id')
-        if category_id:
-            self.validate_uuid(category_id, 'category_id')
-            queryset = queryset.filter(category_id=category_id)
+        if category_id is not None and str(category_id).strip():
+            try:
+                cat_id = int(str(category_id).strip())
+                queryset = queryset.filter(category_id=cat_id)
+            except (ValueError, TypeError):
+                # If not a valid integer, ignore the filter
+                pass
         
         # Date range filters
         start_date = request.query_params.get('start_date')
@@ -77,19 +86,20 @@ class ExpenseFilterMixin:
             validated_date = self.validate_date(end_date, 'end_date')
             queryset = queryset.filter(expense_date__lte=validated_date)
         
-        # Status filter
+        # Status filter (only apply when explicitly 'true' or 'false')
         is_settled = request.query_params.get('is_settled')
-        if is_settled is not None:
-            queryset = queryset.filter(is_settled=is_settled.lower() == 'true')
+        if is_settled is not None and str(is_settled).strip() != '':
+            queryset = queryset.filter(is_settled=str(is_settled).lower() == 'true')
         
-        # Search filter
+        # Search filter (only when non-empty)
         search = request.query_params.get('search')
-        if search:
-            sanitized_search = self.sanitize_search(search)
-            queryset = queryset.filter(
-                Q(title__icontains=sanitized_search) |
-                Q(description__icontains=sanitized_search) |
-                Q(tags__name__icontains=sanitized_search)
-            ).distinct()
+        if search is not None and str(search).strip():
+            sanitized_search = self.sanitize_search(str(search).strip())
+            if sanitized_search:
+                queryset = queryset.filter(
+                    Q(title__icontains=sanitized_search) |
+                    Q(description__icontains=sanitized_search) |
+                    Q(tags__name__icontains=sanitized_search)
+                ).distinct()
         
         return queryset.order_by('-expense_date', '-created_at')

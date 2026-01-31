@@ -85,27 +85,63 @@ def user_balances(request):
     user = request.user
     group_id = request.query_params.get('group_id')
     
-    # Get all expense shares where user is involved
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    
+    # Get all expense shares where user is involved (unsettled only)
     shares_qs = ExpenseShare.objects.filter(
         Q(user=user) | Q(paid_by=user),
         is_settled=False
-    )
+    ).select_related('user', 'paid_by', 'expense')
+    
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"User {user.id} balance check: Found {shares_qs.count()} unsettled shares")
     
     if group_id:
         shares_qs = shares_qs.filter(expense__group_id=group_id)
     
-    # Calculate balances
+    # Calculate direct totals first (before debt simplification)
+    total_you_owe = Decimal('0')
+    total_owed_to_you = Decimal('0')
+    
+    # Calculate balances per user
     balances = defaultdict(lambda: {'owed': Decimal('0'), 'owes': Decimal('0')})
     
+    # Debug: track share details
+    share_details = []
+    
     for share in shares_qs:
-        if share.user == user:
-            # User owes this amount
-            if share.paid_by != user:
-                balances[share.paid_by.id]['owed'] += share.amount
+        share_user_id = share.user_id
+        share_paid_by_id = share.paid_by_id
+        current_user_id = user.id
+        
+        share_info = {
+            'share_id': str(share.id),
+            'user_id': share_user_id,
+            'paid_by_id': share_paid_by_id,
+            'amount': float(share.amount),
+            'expense_title': share.expense.title if share.expense else 'Unknown',
+        }
+        
+        if share_user_id == current_user_id:
+            # This is current user's share
+            if share_paid_by_id != current_user_id:
+                # Someone else paid for user's share - user owes them
+                balances[share_paid_by_id]['owed'] += share.amount
+                total_you_owe += share.amount
+                share_info['category'] = 'you_owe'
+            else:
+                share_info['category'] = 'self_paid'
+        elif share_paid_by_id == current_user_id:
+            # User paid for someone else's share - they owe user
+            balances[share_user_id]['owes'] += share.amount
+            total_owed_to_you += share.amount
+            share_info['category'] = 'owed_to_you'
         else:
-            # Someone owes user
-            if share.paid_by == user:
-                balances[share.user.id]['owes'] += share.amount
+            share_info['category'] = 'not_related'
+        
+        share_details.append(share_info)
     
     # Calculate net balances for each user
     net_balances = {}
@@ -114,12 +150,8 @@ def user_balances(request):
         if abs(net) > Decimal('0.01'):  # Only include significant amounts
             net_balances[str(other_user_id)] = net
     
-    # Use advanced debt simplification
+    # Use advanced debt simplification for detailed breakdown
     simplified_transactions = DebtSimplifier.minimize_transactions(net_balances)
-    
-    # Convert to user-friendly format
-    from django.contrib.auth import get_user_model
-    User = get_user_model()
     
     simplified_balances = []
     for txn in simplified_transactions:
@@ -135,8 +167,8 @@ def user_balances(request):
                 simplified_balances.append({
                     'user_id': to_user_id,
                     'user_name': to_user.get_full_name() or to_user.username,
-                    'amount': amount,
-                    'currency': 'USD',  # TODO: Handle multiple currencies
+                    'amount': float(amount),
+                    'currency': 'USD',
                     'you_owe': True,
                     'owes_you': False
                 })
@@ -149,7 +181,7 @@ def user_balances(request):
                 simplified_balances.append({
                     'user_id': from_user_id,
                     'user_name': from_user.get_full_name() or from_user.username,
-                    'amount': amount,
+                    'amount': float(amount),
                     'currency': 'USD',
                     'you_owe': False,
                     'owes_you': True
@@ -168,17 +200,27 @@ def user_balances(request):
                 'from_user_name': from_user.get_full_name() or from_user.username,
                 'to_user_id': txn['to'],
                 'to_user_name': to_user.get_full_name() or to_user.username,
-                'amount': txn['amount'],
+                'amount': float(txn['amount']),
                 'currency': 'USD'
             })
         except User.DoesNotExist:
             continue
     
+    # Return both the direct totals AND the simplified balances
+    # Direct totals show the raw amounts before debt simplification
     return Response({
         'balances': simplified_balances,
         'simplified_transactions': transactions_with_names,
-        'total_owed': sum(b['amount'] for b in simplified_balances if b['you_owe']),
-        'total_owed_to_you': sum(b['amount'] for b in simplified_balances if b['owes_you'])
+        'total_owed': float(total_you_owe),
+        'total_owed_to_you': float(total_owed_to_you),
+        # Include raw balances for debugging (can be removed in production)
+        'debug_info': {
+            'user_id': user.id,
+            'shares_count': len(share_details),
+            'raw_you_owe': float(total_you_owe),
+            'raw_owed_to_you': float(total_owed_to_you),
+            'share_details': share_details[:10],  # Limit to first 10 for debugging
+        }
     })
 
 

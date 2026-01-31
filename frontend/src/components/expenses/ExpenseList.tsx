@@ -46,7 +46,10 @@ import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { useAppSelector, useAppDispatch } from '../../hooks/redux';
 import { fetchExpenses, deleteExpense } from '../../store/slices/expenseSlice';
+import { fetchCategories } from '../../store/slices/coreSlice';
+import { fetchGroups as fetchGroupsAction } from '../../store/slices/groupSlice';
 import { formatAmount, toNumber } from '../../utils/formatting';
+import { useAppContext } from '../../context/AppContext';
 
 interface ExpenseListProps {
   groupId?: string;
@@ -58,7 +61,11 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ groupId, currentGroupFilter, 
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const { expenses: storeExpenses, loading } = useAppSelector((state) => state.expenses);
-  const { groups } = useAppSelector((state) => state.groups);
+  const { groups: reduxGroups } = useAppSelector((state) => state.groups);
+  const { categories } = useAppSelector((state) => state.core);
+  
+  // Use AppContext groups for consistency with Groups page
+  const { groups: contextGroups } = useAppContext();
   
   // Use expenses from props if provided and not empty, otherwise from store
   // If propsExpenses is explicitly undefined, use store expenses
@@ -69,24 +76,43 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ groupId, currentGroupFilter, 
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [groupFilter, setGroupFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedExpense, setSelectedExpense] = useState<any>(null);
 
+  // Load categories for filter dropdowns
   useEffect(() => {
-    // Fetch expenses with filters
-    dispatch(fetchExpenses({
-      filters: {
-        group_id: groupId,
-        search: searchTerm,
-        category_id: categoryFilter !== 'all' ? categoryFilter : undefined,
-        is_settled: statusFilter !== 'all' ? statusFilter === 'settled' : undefined,
-      }
-    }));
-  }, [dispatch, groupId, searchTerm, categoryFilter, statusFilter]);
+    dispatch(fetchCategories());
+    // Also try to fetch from API in case backend has data
+    dispatch(fetchGroupsAction());
+  }, [dispatch]);
+
+  const categoriesArray = Array.isArray(categories) ? categories : [];
+  // Use AppContext groups (same source as Groups page) for consistency
+  const groupsArray = Array.isArray(contextGroups) ? contextGroups : [];
+
+  // Sync group filter when parent passes currentGroupFilter (e.g. from Groups page)
+  useEffect(() => {
+    if (currentGroupFilter) setGroupFilter(currentGroupFilter);
+  }, [currentGroupFilter]);
+
+  // Build flat query params for backend (backend expects top-level params; omit undefined/empty)
+  useEffect(() => {
+    const params: Record<string, string> = {};
+    const effectiveGroupId = groupId || currentGroupFilter || (groupFilter !== 'all' ? groupFilter : undefined);
+    if (effectiveGroupId) params.group_id = String(effectiveGroupId);
+    const search = searchTerm.trim();
+    if (search) params.search = search;
+    if (categoryFilter !== 'all') params.category_id = categoryFilter;
+    if (statusFilter === 'settled') params.is_settled = 'true';
+    if (statusFilter === 'pending') params.is_settled = 'false';
+
+    dispatch(fetchExpenses(params));
+  }, [dispatch, groupId, currentGroupFilter, searchTerm, categoryFilter, statusFilter, groupFilter]);
 
   const handleChangePage = (event: unknown, newPage: number) => {
     setPage(newPage);
@@ -190,9 +216,9 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ groupId, currentGroupFilter, 
     return colors[category] || 'default';
   };
 
-  // Get group name for display when filtering
+  // Get group name for display when filtering (use contextGroups for consistency)
   const currentGroup = currentGroupFilter ? 
-    groups.find((g: any) => g.id === currentGroupFilter) : null;
+    contextGroups.find((g: any) => g.id === currentGroupFilter) : null;
 
   return (
     <Card>
@@ -223,12 +249,27 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ groupId, currentGroupFilter, 
               onChange={(e) => setCategoryFilter(e.target.value)}
             >
               <MenuItem value="all">All Categories</MenuItem>
-              <MenuItem value="1">Food</MenuItem>
-              <MenuItem value="2">Transportation</MenuItem>
-              <MenuItem value="3">Entertainment</MenuItem>
-              <MenuItem value="4">Shopping</MenuItem>
-              <MenuItem value="5">Bills</MenuItem>
-              <MenuItem value="6">Healthcare</MenuItem>
+              {categoriesArray.map((cat: any) => (
+                <MenuItem key={cat.id} value={cat.id}>
+                  {cat.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel>Group</InputLabel>
+            <Select
+              value={groupFilter}
+              label="Group"
+              onChange={(e) => setGroupFilter(e.target.value)}
+            >
+              <MenuItem value="all">All Groups</MenuItem>
+              {groupsArray.map((g: any) => (
+                <MenuItem key={g.id} value={g.id}>
+                  {g.name}
+                </MenuItem>
+              ))}
             </Select>
           </FormControl>
           
@@ -259,12 +300,14 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ groupId, currentGroupFilter, 
             </Select>
           </FormControl>
           
-          <IconButton
-            onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-            size="small"
-          >
-            <Sort />
-          </IconButton>
+          <Tooltip title={sortOrder === 'desc' ? 'Descending (click for ascending)' : 'Ascending (click for descending)'}>
+            <IconButton
+              onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+              size="small"
+            >
+              <Sort />
+            </IconButton>
+          </Tooltip>
         </Box>
 
         {/* Table */}

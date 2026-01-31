@@ -9,6 +9,8 @@ interface Expense {
   category?: {
     id: string;
     name: string;
+    color?: string;
+    icon?: string;
   };
   currency?: {
     id: string;
@@ -18,6 +20,11 @@ interface Expense {
   date?: string;
   expense_date?: string;
   created_by?: {
+    id: string;
+    first_name: string;
+    last_name: string;
+  };
+  paid_by?: {
     id: string;
     first_name: string;
     last_name: string;
@@ -170,8 +177,13 @@ const expenseSlice = createSlice({
       })
       .addCase(fetchExpenses.fulfilled, (state, action) => {
         state.loading = false;
-        state.expenses = action.payload.results || action.payload;
-        state.totalExpenses = action.payload.count || action.payload.length;
+        const payload = action.payload;
+        state.expenses = Array.isArray(payload)
+          ? payload
+          : (Array.isArray(payload?.results) ? payload.results : []);
+        state.totalExpenses = typeof payload?.count === 'number'
+          ? payload.count
+          : state.expenses.length;
       })
       .addCase(fetchExpenses.rejected, (state, action) => {
         state.loading = false;

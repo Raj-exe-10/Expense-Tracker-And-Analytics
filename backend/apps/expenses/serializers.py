@@ -342,6 +342,12 @@ class ExpenseSerializer(serializers.ModelSerializer):
         if validated_data.get('ocr_data') is None:
             validated_data['ocr_data'] = {}
         
+        # Set expense_type based on whether group is provided
+        if validated_data.get('group'):
+            validated_data['expense_type'] = 'group'
+        else:
+            validated_data['expense_type'] = 'personal'
+        
         # Create expense (expense_date should already be set from to_internal_value or create method)
         # Use _skip_share_creation to prevent model's save() from auto-creating shares
         expense = Expense.objects.create(**validated_data)
@@ -396,6 +402,13 @@ class ExpenseSerializer(serializers.ModelSerializer):
         tag_ids = validated_data.pop('tag_ids', None)
         shares_data = validated_data.pop('shares_data', None)
         category_id = validated_data.pop('category_id', None)
+        
+        # Set expense_type based on whether group is provided
+        if 'group' in validated_data:
+            if validated_data.get('group'):
+                validated_data['expense_type'] = 'group'
+            else:
+                validated_data['expense_type'] = 'personal'
         
         # Update category - handle both setting and clearing
         import logging

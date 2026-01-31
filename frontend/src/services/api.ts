@@ -158,6 +158,9 @@ export const groupsAPI = {
   getGroups: (params?: any) =>
     api.get('/groups/groups/', { params }).then(res => res.data),
   
+  getGroup: (id: string) =>
+    api.get(`/groups/groups/${id}/`).then(res => res.data),
+  
   createGroup: (data: any) =>
     api.post('/groups/groups/', data).then(res => res.data),
   
@@ -170,14 +173,43 @@ export const groupsAPI = {
   getGroupBalances: (groupId: string) =>
     api.get(`/groups/groups/${groupId}/balances/`).then(res => res.data),
   
-  inviteToGroup: (groupId: string, data: { email?: string; phone_number?: string; message?: string }) =>
-    api.post(`/groups/groups/${groupId}/invite/`, data).then(res => res.data),
+  getGroupMembers: (groupId: string) =>
+    api.get(`/groups/groups/${groupId}/members/`).then(res => res.data),
   
-  joinGroup: (inviteCode: string) =>
-    api.post(`/groups/groups/join/`, { invite_code: inviteCode }).then(res => res.data),
+  getGroupActivities: (groupId: string) =>
+    api.get(`/groups/groups/${groupId}/activities/`).then(res => res.data),
+  
+  getGroupStatistics: (groupId: string, days?: number) =>
+    api.get(`/groups/groups/${groupId}/statistics/`, { params: { days } }).then(res => res.data),
+  
+  // Member management
+  searchUsers: (query: string, groupId?: string) =>
+    api.get('/groups/groups/search_users/', { params: { q: query, group_id: groupId } }).then(res => res.data),
+  
+  addMember: (groupId: string, userId: string, role?: string) =>
+    api.post(`/groups/groups/${groupId}/add_member/`, { user_id: userId, role: role || 'member' }).then(res => res.data),
+  
+  removeMember: (groupId: string, userId: string) =>
+    api.post(`/groups/groups/${groupId}/remove_member/`, { user_id: userId }).then(res => res.data),
+  
+  changeMemberRole: (groupId: string, userId: string, role: string) =>
+    api.post(`/groups/groups/${groupId}/change_member_role/`, { user_id: userId, role }).then(res => res.data),
+  
+  // Invite management
+  getInviteLink: (groupId: string, regenerate?: boolean) =>
+    api.get(`/groups/groups/${groupId}/invite_link/`, { params: { regenerate } }).then(res => res.data),
+  
+  inviteToGroup: (groupId: string, data: { email?: string; phone_number?: string; message?: string }) =>
+    api.post(`/groups/groups/${groupId}/invite_member/`, data).then(res => res.data),
+  
+  joinByCode: (inviteCode: string) =>
+    api.post('/groups/groups/join_by_code/', { invite_code: inviteCode }).then(res => res.data),
   
   leaveGroup: (groupId: string) =>
     api.post(`/groups/groups/${groupId}/leave/`).then(res => res.data),
+  
+  settleAll: (groupId: string) =>
+    api.post(`/groups/groups/${groupId}/settle_all/`).then(res => res.data),
 };
 
 // Core API
