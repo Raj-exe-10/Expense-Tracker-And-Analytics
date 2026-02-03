@@ -80,6 +80,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'apps.core.middleware.IdempotencyMiddleware',  # POST /expenses idempotency by Idempotency-Key
     'apps.core.middleware.APILoggingMiddleware',  # API logging for monitoring
 ]
 
@@ -211,7 +212,8 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_THROTTLE_RATES': {
         'anon': '100/hour',
-        'user': '1000/hour'
+        'user': '1000/hour',
+        'auth': '5/hour',  # ScopedRateThrottle for login, register, password reset
     },
     'EXCEPTION_HANDLER': 'apps.core.exceptions.custom_exception_handler',  # Custom exception handler
 }
@@ -239,11 +241,9 @@ SIMPLE_JWT = {
 # ============================================================================
 # CORS CONFIGURATION
 # ============================================================================
-
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
+# Load from env CSV, e.g. CORS_ALLOWED_ORIGINS=http://localhost:3000,https://app.example.com
+_cors_origins_str = env.str('CORS_ALLOWED_ORIGINS', default='http://localhost:3000,http://127.0.0.1:3000')
+CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_origins_str.split(',') if o.strip()]
 
 CORS_ALLOW_CREDENTIALS = True
 

@@ -2,6 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from django.db import connection
 from django.db.models import Q, Sum, Count, Avg
 from django.utils import timezone
 from datetime import datetime, timedelta
@@ -449,65 +450,50 @@ class ExpenseShareViewSet(viewsets.ModelViewSet):
     
     @action(detail=False)
     def balances(self, request):
-        """Get balance summary for the current user - optimized version"""
-        user = request.user
-        
-        # Optimized query to get what others owe the user
-        expenses_created = Expense.objects.filter(
-            paid_by=user,
-            is_settled=False
-        ).prefetch_related('shares__user')
-        
-        # Calculate what others owe the user using aggregation
-        shares_owed_to_user = ExpenseShare.objects.filter(
-            expense__paid_by=user,
-            expense__is_settled=False
-        ).exclude(user=user).values('user__id', 'user__username').annotate(
-            total_owed=Sum('amount')
+        """Get balance summary for the current user - DB-level aggregation (no N+1)."""
+        user_id = request.user.id
+        # Single query: counterparty_id, username, owes_you, you_owe, net_balance (SQLite/PostgreSQL compatible)
+        # DB-agnostic: use %s for boolean False (SQLite 0, PostgreSQL false)
+        sql = """
+        WITH owed_to_me AS (
+            SELECT s.user_id AS cid, SUM(s.amount) AS owes_you
+            FROM expense_shares s
+            INNER JOIN expenses e ON e.id = s.expense_id
+            WHERE e.paid_by_id = %s AND s.user_id != %s
+              AND e.is_settled = %s AND s.is_settled = %s
+            GROUP BY s.user_id
+        ),
+        owed_by_me AS (
+            SELECT e.paid_by_id AS cid, SUM(s.amount) AS you_owe
+            FROM expense_shares s
+            INNER JOIN expenses e ON e.id = s.expense_id
+            WHERE s.user_id = %s AND e.paid_by_id != %s
+              AND s.is_settled = %s
+            GROUP BY e.paid_by_id
+        ),
+        counterparties AS (
+            SELECT cid FROM owed_to_me
+            UNION
+            SELECT cid FROM owed_by_me
         )
-        
-        # Calculate what the user owes others using aggregation
-        shares_user_owes = ExpenseShare.objects.filter(
-            user=user,
-            is_settled=False
-        ).exclude(expense__paid_by=user).values(
-            'expense__paid_by__id',
-            'expense__paid_by__username'
-        ).annotate(
-            total_owed=Sum('amount')
-        )
-        
-        # Build balances dictionary
-        balances = {}
-        
-        for share in shares_owed_to_user:
-            user_id = share['user__id']
-            if user_id not in balances:
-                balances[user_id] = {
-                    'user': share['user__username'],
-                    'user_id': user_id,
-                    'owes_you': 0,
-                    'you_owe': 0,
-                    'net_balance': 0
-                }
-            balances[user_id]['owes_you'] = float(share['total_owed'])
-        
-        for share in shares_user_owes:
-            creator_id = share['expense__paid_by__id']
-            if creator_id not in balances:
-                balances[creator_id] = {
-                    'user': share['expense__paid_by__username'],
-                    'user_id': creator_id,
-                    'owes_you': 0,
-                    'you_owe': 0,
-                    'net_balance': 0
-                }
-            balances[creator_id]['you_owe'] = Decimal(str(share['total_owed']))
-        
-        # Calculate net balances (Decimal math)
-        for user_id in balances:
-            balances[user_id]['net_balance'] = (
-                balances[user_id]['owes_you'] - balances[user_id]['you_owe']
+        SELECT
+            cp.cid AS user_id,
+            u.username AS user,
+            COALESCE(o.owes_you, 0) AS owes_you,
+            COALESCE(y.you_owe, 0) AS you_owe,
+            (COALESCE(o.owes_you, 0) - COALESCE(y.you_owe, 0)) AS net_balance
+        FROM counterparties cp
+        LEFT JOIN owed_to_me o ON o.cid = cp.cid
+        LEFT JOIN owed_by_me y ON y.cid = cp.cid
+        LEFT JOIN auth_user u ON u.id = cp.cid
+        ORDER BY net_balance DESC
+        """
+        with connection.cursor() as cursor:
+            cursor.execute(
+                sql,
+                [user_id, user_id, False, False, user_id, user_id, False],
             )
-        
-        return Response(list(balances.values()))
+            columns = [col[0] for col in cursor.description]
+            rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+        return Response(rows)

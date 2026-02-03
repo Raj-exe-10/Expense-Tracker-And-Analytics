@@ -383,11 +383,10 @@ class UserFriendshipSerializer(serializers.ModelSerializer):
 
 
 class SimpleUserSerializer(serializers.ModelSerializer):
-    """Simple user serializer for minimal data"""
-    
+    """Minimal user data; strictly excludes PII (email, phone_number)."""
     full_name = serializers.CharField(source='get_full_name', read_only=True)
-    
+
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'full_name', 'avatar']
-        read_only_fields = ['id', 'username', 'email', 'first_name', 'last_name', 'full_name', 'avatar']
+        fields = ['id', 'username', 'first_name', 'last_name', 'full_name', 'avatar']
+        read_only_fields = ['id', 'username', 'first_name', 'last_name', 'full_name', 'avatar']

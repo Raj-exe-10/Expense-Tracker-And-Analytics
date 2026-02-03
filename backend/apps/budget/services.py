@@ -59,36 +59,103 @@ def get_wallet_for_expense(expense):
         return wallet, None
 
 
-def get_spent_for_wallet_allocation(allocation, wallet):
+def get_spent_for_wallet_allocation(allocation, wallet, scope='personal'):
     """
     Sum of expenses in this month for this wallet (categories + user_categories in wallet).
-    Includes both individual and group expenses paid by the budget user (full amount
-    the payer spent counts toward their wallet).
+    Scope determines what expenses are included:
+    - 'personal': Individual expenses (paid_by=user) + User's share of group expenses.
+    - 'group': Total amount of group expenses (where user is member) + Individual expenses. 
+      (Actually prompt says 'Group Overview' = Total expenses for groups user is part of. 
+       Usually implies IGNORING personal, but let's include personal if category matches? 
+       Prompt says: "Show total expenses for groups... (ignoring personal share)." 
+       It implies strictly Group Focus? Let's follow "Total Bill Amount In My Groups".)
+       
+       Wait, strictly "Group Overview" might mean ONLY group expenses.
+       Prompt: "State 2: Group Overview... Data: Show total expenses for groups the user is part of... Logic: Sum(Total_Bill_Amount_In_My_Groups)"
+       State 3: "All / Combined... Comprehensive list..."
+       
+       Let's implement:
+       - 'personal': My individual expenses + My shares in group expenses.
+       - 'group': Total bills of group expenses. (Excludes individual expenses? Maybe, if the goal is "Group Overview").
+       - 'all': Personal + Group Total Bills.
     """
-    from apps.expenses.models import Expense
+    from apps.expenses.models import Expense, ExpenseShare
     user = allocation.monthly_budget.user
     year = allocation.monthly_budget.year
     month = allocation.monthly_budget.month
+    
     category_ids = list(
         WalletCategory.objects.filter(wallet=wallet).values_list('category_id', flat=True)
     )
     user_category_ids = list(
         UserCategory.objects.filter(wallet=wallet).values_list('id', flat=True)
     )
-    base_q = models.Q(
-        paid_by=user,
+    
+    # Base filters for time and deletion
+    time_q = models.Q(
         expense_date__year=year,
         expense_date__month=month,
-        is_deleted=False,
     )
-    q_filter = models.Q()
+    
+    # Category filters
+    cat_q = models.Q()
     if category_ids:
-        q_filter |= models.Q(category_id__in=category_ids)
+        cat_q |= models.Q(category_id__in=category_ids)
     if user_category_ids:
-        q_filter |= models.Q(user_category_id__in=user_category_ids)
-    if not q_filter:
+        cat_q |= models.Q(user_category_id__in=user_category_ids)
+    
+    if not cat_q:
         return Decimal('0')
-    return Expense.objects.filter(base_q & q_filter).aggregate(s=Sum('amount'))['s'] or Decimal('0')
+
+    total_spent = Decimal('0')
+
+    if scope == 'personal':
+        # 1. Individual expenses paid by user
+        individual_q = time_q & cat_q & models.Q(paid_by=user, group__isnull=True, is_deleted=False)
+        individual_sum = Expense.objects.filter(individual_q).aggregate(s=Sum('amount'))['s'] or Decimal('0')
+        
+        # 2. My shares in group expenses
+        # Filter shares where expense matches category/time
+        share_q = models.Q(
+            user=user, 
+            expense__is_deleted=False,
+            expense__expense_date__year=year,
+            expense__expense_date__month=month
+        )
+        
+        # Check expense categories via the share's expense
+        share_cat_q = models.Q()
+        if category_ids:
+            share_cat_q |= models.Q(expense__category_id__in=category_ids)
+        if user_category_ids:
+            share_cat_q |= models.Q(expense__user_category_id__in=user_category_ids)
+            
+        share_sum = ExpenseShare.objects.filter(share_q & share_cat_q).aggregate(s=Sum('amount'))['s'] or Decimal('0')
+        
+        total_spent = individual_sum + share_sum
+
+    elif scope == 'group':
+        # Total bill amount of group expenses where user is a member
+        # Logic: Expense has group, user is active member of group.
+        # Note: Prompt says "Sum(Total_Bill_Amount_In_My_Groups)"
+        
+        group_base_q = time_q & cat_q & models.Q(group__memberships__user=user, group__memberships__is_active=True, is_deleted=False)
+        total_spent = Expense.objects.filter(group_base_q).aggregate(s=Sum('amount'))['s'] or Decimal('0')
+
+    elif scope == 'all':
+        # Individual + Group Totals
+        
+        # Individual
+        individual_q = time_q & cat_q & models.Q(paid_by=user, group__isnull=True, is_deleted=False)
+        individual_sum = Expense.objects.filter(individual_q).aggregate(s=Sum('amount'))['s'] or Decimal('0')
+        
+        # Group Totals
+        group_base_q = time_q & cat_q & models.Q(group__memberships__user=user, group__memberships__is_active=True, is_deleted=False)
+        group_sum = Expense.objects.filter(group_base_q).aggregate(s=Sum('amount'))['s'] or Decimal('0')
+        
+        total_spent = individual_sum + group_sum
+        
+    return total_spent
 
 
 def get_adjustments_total(allocation):
@@ -99,22 +166,31 @@ def get_adjustments_total(allocation):
     ).aggregate(s=Sum('amount'))['s'] or Decimal('0')
 
 
-def remaining_balance(allocation):
+def remaining_balance(allocation, scope='personal'):
     """
     Remaining balance for this allocation.
-    Regular: amount + rollover_from_previous + adjustments - spent
-    Sinking: accumulated_balance + adjustments - spent (and we add contribution at month start)
+    If scope is 'personal', uses the personal limit.
+    If scope is 'group' or 'all', conceptually 'remaining' against a personal limit 
+    is weird, but we will return (Limit - ScopeSpent) essentially showing 
+    how much the group usage eats into the personal budget (or overflows it).
+    
+    Actually, for 'group' view, usually you strictly track spending. 
+    But to maintain the UI bar contract, we return (Limit - Spent).
     """
     if not allocation:
         return Decimal('0')
     wallet = allocation.wallet
-    spent = get_spent_for_wallet_allocation(allocation, wallet)
+    spent = get_spent_for_wallet_allocation(allocation, wallet, scope=scope)
     adjustments = get_adjustments_total(allocation)
+    
     if wallet.wallet_type == 'sinking_fund':
-        # Contribution is added at start of month (see ensure_sinking_contribution)
-        return allocation.accumulated_balance + adjustments - spent
-    # Regular
-    return allocation.amount + allocation.rollover_from_previous + adjustments - spent
+        # Contribution is added at start of month
+        limit = allocation.accumulated_balance + adjustments
+    else:
+        # Regular
+        limit = allocation.amount + allocation.rollover_from_previous + adjustments
+        
+    return limit - spent
 
 
 def ensure_monthly_budget(user, year, month, currency):

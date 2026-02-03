@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework.throttling import AnonRateThrottle
+from rest_framework.throttling import AnonRateThrottle, ScopedRateThrottle
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
@@ -28,17 +28,19 @@ from .serializers import (
     UserFriendshipSerializer, SimpleUserSerializer
 )
 from apps.core.models import ActivityLog
+from apps.core.utils import get_client_ip
 
 
-class LoginRateThrottle(AnonRateThrottle):
-    """Rate limiting for login endpoint - 5 attempts per minute"""
-    rate = '5/minute'
+class AuthScopedThrottle(ScopedRateThrottle):
+    """5 requests/hour for authentication and password-reset endpoints."""
+    scope_attr = 'throttle_scope'
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     """Custom JWT token view with enhanced user data"""
     serializer_class = CustomTokenObtainPairSerializer
-    throttle_classes = [LoginRateThrottle]
+    throttle_classes = [AuthScopedThrottle]
+    throttle_scope = 'auth'
     
     def post(self, request, *args, **kwargs):
         # Check for account lockout before attempting login
@@ -65,11 +67,11 @@ class CustomTokenObtainPairView(TokenObtainPairView):
                     ActivityLog.objects.create(
                         user=user,
                         action='login',
-                        object_repr=f"Login from {request.META.get('REMOTE_ADDR')}",
-                        ip_address=request.META.get('REMOTE_ADDR'),
+                        object_repr=f"Login from {get_client_ip(request)}",
+                            ip_address=get_client_ip(request),
                         user_agent=request.META.get('HTTP_USER_AGENT', '')
                     )
-                    user.last_login_ip = request.META.get('REMOTE_ADDR')
+                    user.last_login_ip = get_client_ip(request)
                     user.failed_login_attempts = 0
                     user.account_locked_until = None
                     user.save(update_fields=['last_login_ip', 'failed_login_attempts', 'account_locked_until'])
@@ -115,7 +117,7 @@ class RegisterView(generics.CreateAPIView):
                     user=user,
                     action='create',
                     object_repr=f"User registration: {user.email}",
-                    ip_address=request.META.get('REMOTE_ADDR'),
+                    ip_address=get_client_ip(request),
                     user_agent=request.META.get('HTTP_USER_AGENT', '')
                 )
                 
@@ -215,8 +217,8 @@ class LogoutView(APIView):
             ActivityLog.objects.create(
                 user=request.user,
                 action='logout',
-                object_repr=f"Logout from {request.META.get('REMOTE_ADDR')}",
-                ip_address=request.META.get('REMOTE_ADDR'),
+                object_repr=f"Logout from {get_client_ip(request)}",
+                ip_address=get_client_ip(request),
                 user_agent=request.META.get('HTTP_USER_AGENT', '')
             )
             
@@ -255,12 +257,11 @@ class ChangePasswordView(APIView):
             user.set_password(serializer.validated_data['new_password'])
             user.save()
             
-            # Log password change
             ActivityLog.objects.create(
                 user=user,
                 action='update',
                 object_repr="Password changed",
-                ip_address=request.META.get('REMOTE_ADDR'),
+                ip_address=get_client_ip(request),
                 user_agent=request.META.get('HTTP_USER_AGENT', '')
             )
             
@@ -272,7 +273,9 @@ class ChangePasswordView(APIView):
 class RequestPasswordResetView(APIView):
     """Request password reset endpoint"""
     permission_classes = [permissions.AllowAny]
-    
+    throttle_classes = [AuthScopedThrottle]
+    throttle_scope = 'auth'
+
     @extend_schema(
         request=PasswordResetSerializer,
         summary="Request password reset",
@@ -331,12 +334,11 @@ class PasswordResetConfirmView(APIView):
                     user.set_password(serializer.validated_data['new_password'])
                     user.save()
                     
-                    # Log password reset
                     ActivityLog.objects.create(
                         user=user,
                         action='update',
                         object_repr="Password reset completed",
-                        ip_address=request.META.get('REMOTE_ADDR'),
+                        ip_address=get_client_ip(request),
                         user_agent=request.META.get('HTTP_USER_AGENT', '')
                     )
                     

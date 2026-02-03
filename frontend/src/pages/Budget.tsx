@@ -26,6 +26,9 @@ import {
   CircularProgress,
   useTheme,
   Tooltip,
+  ToggleButton,
+  ToggleButtonGroup,
+  Badge,
 } from '@mui/material';
 import {
   Add,
@@ -35,6 +38,9 @@ import {
   Edit,
   Delete,
   Category,
+  Person,
+  Groups,
+  AllInclusive,
 } from '@mui/icons-material';
 import { budgetAPI, coreAPI } from '../services/api';
 import { formatAmount } from '../utils/formatting';
@@ -72,8 +78,15 @@ interface Wallet {
   color: string;
 }
 
+type ScopeType = 'personal' | 'group' | 'all';
+
 export default function Budget() {
   const theme = useTheme();
+  // State 1: Personal Focus, State 2: Group Overview, State 3: All/Combined
+  const [scope, setScope] = useState<ScopeType>(() => {
+    return (localStorage.getItem('budgetScope') as ScopeType) || 'personal';
+  });
+
   const [budget, setBudget] = useState<MonthlyBudget | null>(null);
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [loading, setLoading] = useState(true);
@@ -108,7 +121,7 @@ export default function Budget() {
     setError(null);
     try {
       const [budgetData, walletsData] = await Promise.all([
-        budgetAPI.getCurrentBudget(),
+        budgetAPI.getCurrentBudget({ scope }), // Pass scope to API
         budgetAPI.getWallets(),
       ]);
       setBudget(Array.isArray(budgetData) ? null : budgetData);
@@ -119,14 +132,22 @@ export default function Budget() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [scope]);
 
   useEffect(() => {
     fetchBudget();
     coreAPI.getCurrencies().then((data: any) => {
       setCurrencies(Array.isArray(data) ? data : data.results || []);
-    }).catch(() => {});
+    }).catch(() => { });
   }, [fetchBudget]);
+
+  // Handle Scope Change
+  const handleScopeChange = (event: React.MouseEvent<HTMLElement>, newScope: ScopeType) => {
+    if (newScope !== null) {
+      setScope(newScope);
+      localStorage.setItem('budgetScope', newScope);
+    }
+  };
 
   // Refetch when an expense is added/updated (so budget reflects new spending)
   useEffect(() => {
@@ -349,8 +370,41 @@ export default function Budget() {
         <Typography variant="h5" fontWeight="bold">
           Budget & Envelopes
         </Typography>
-        <Box>
-          <Button startIcon={<Refresh />} onClick={fetchBudget} sx={{ mr: 1 }}>
+        <Box display="flex" gap={2} alignItems="center">
+          <ToggleButtonGroup
+            value={scope}
+            exclusive
+            onChange={handleScopeChange}
+            aria-label="budget scope"
+            size="small"
+            color="primary"
+          >
+            <ToggleButton value="personal" aria-label="personal focus">
+              <Tooltip title="Personal Focus: Your expenses + Your details">
+                <Box display="flex" gap={1} alignItems="center">
+                  <Person fontSize="small" />
+                  <Typography variant="caption" sx={{ display: { xs: 'none', sm: 'block' } }}>Personal</Typography>
+                </Box>
+              </Tooltip>
+            </ToggleButton>
+            <ToggleButton value="group" aria-label="group overview">
+              <Tooltip title="Group Overview: Total bill amounts for groups">
+                <Box display="flex" gap={1} alignItems="center">
+                  <Groups fontSize="small" />
+                  <Typography variant="caption" sx={{ display: { xs: 'none', sm: 'block' } }}>Group</Typography>
+                </Box>
+              </Tooltip>
+            </ToggleButton>
+            <ToggleButton value="all" aria-label="combined view">
+              <Tooltip title="All / Combined: Comprehensive list">
+                <Box display="flex" gap={1} alignItems="center">
+                  <AllInclusive fontSize="small" />
+                  <Typography variant="caption" sx={{ display: { xs: 'none', sm: 'block' } }}>All</Typography>
+                </Box>
+              </Tooltip>
+            </ToggleButton>
+          </ToggleButtonGroup>
+          <Button startIcon={<Refresh />} onClick={fetchBudget}>
             Refresh
           </Button>
         </Box>
@@ -556,8 +610,16 @@ export default function Budget() {
                             <Chip size="small" label="Sinking fund" color="info" />
                           )}
                         </Box>
+                        <Box display="flex" alignItems="center" gap={1}>
+                          <Typography variant="body2" color="textSecondary">
+                            Limit: {symbol}{formatAmount(limit)}
+                          </Typography>
+                          {scope === 'group' && (
+                            <Chip size="small" label="Group Total" color="warning" sx={{ height: 16, fontSize: '0.6rem' }} />
+                          )}
+                        </Box>
                         <Typography variant="body2" color="textSecondary">
-                          Limit: {symbol}{formatAmount(limit)} · Spent: {symbol}{formatAmount(alloc.spent)}
+                          Spent: {symbol}{formatAmount(alloc.spent)}
                         </Typography>
                         <LinearProgress
                           variant="determinate"
@@ -566,7 +628,13 @@ export default function Budget() {
                           sx={{ mt: 1, mb: 0.5, height: 8, borderRadius: 1 }}
                         />
                         <Typography variant="h6" color={isOver ? 'error.main' : 'text.primary'}>
-                          Remaining: {symbol}{formatAmount(alloc.remaining)}
+                          {scope === 'group' ? (
+                            <Tooltip title="Remaining against Personal Limit (Group spending eats into personal limit)">
+                              <span>Remaining: {symbol}{formatAmount(alloc.remaining)}</span>
+                            </Tooltip>
+                          ) : (
+                            <span>Remaining: {symbol}{formatAmount(alloc.remaining)}</span>
+                          )}
                         </Typography>
                       </CardContent>
                     </Card>

@@ -91,10 +91,14 @@ class WalletAllocationSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at']
 
     def get_spent(self, obj):
-        return get_spent_for_wallet_allocation(obj, obj.wallet)
+        request = self.context.get('request')
+        scope = request.query_params.get('scope', 'personal') if request else 'personal'
+        return get_spent_for_wallet_allocation(obj, obj.wallet, scope=scope)
 
     def get_remaining(self, obj):
-        return remaining_balance(obj)
+        request = self.context.get('request')
+        scope = request.query_params.get('scope', 'personal') if request else 'personal'
+        return remaining_balance(obj, scope=scope)
 
     def get_adjustments_total(self, obj):
         return get_adjustments_total(obj)
