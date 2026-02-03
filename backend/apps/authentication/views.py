@@ -53,107 +53,41 @@ class CustomTokenObtainPairView(TokenObtainPairView):
                     )
             except User.DoesNotExist:
                 pass
-        
-        try:
-            # Call parent's post method which handles serialization
-            response = super().post(request, *args, **kwargs)
-            
-            if response.status_code == 200:
-                # Log successful login
-                try:
-                    email = request.data.get('email') or request.data.get('username')
-                    if email:
-                        user = User.objects.get(email=email)
-                        ActivityLog.objects.create(
-                            user=user,
-                            action='login',
-                            object_repr=f"Login from {request.META.get('REMOTE_ADDR')}",
-                            ip_address=request.META.get('REMOTE_ADDR'),
-                            user_agent=request.META.get('HTTP_USER_AGENT', '')
-                        )
-                        
-                        # Update last login IP and reset failed attempts
-                        user.last_login_ip = request.META.get('REMOTE_ADDR')
-                        user.failed_login_attempts = 0
-                        user.account_locked_until = None
-                        user.save(update_fields=['last_login_ip', 'failed_login_attempts', 'account_locked_until'])
-                except User.DoesNotExist:
-                    pass
-            else:
-                # Increment failed attempts on failed login
+
+        # Rely on global exception handler for auth/validation errors (consistent JSON)
+        response = super().post(request, *args, **kwargs)
+
+        if response.status_code == 200:
+            try:
                 email = request.data.get('email') or request.data.get('username')
                 if email:
-                    try:
-                        user = User.objects.get(email=email)
-                        user.failed_login_attempts += 1
-                        
-                        # Lock account after 5 failed attempts for 15 minutes
-                        if user.failed_login_attempts >= 5:
-                            user.account_locked_until = timezone.now() + timedelta(minutes=15)
-                        
-                        user.save(update_fields=['failed_login_attempts', 'account_locked_until'])
-                    except User.DoesNotExist:
-                        pass
-            
-            return response
-        except Exception as e:
-            # Return proper error response with detail field
-            from rest_framework import status
-            from rest_framework.response import Response
-            from rest_framework.serializers import ValidationError as SerializerValidationError
-            import traceback
-            
-            # Log the error for debugging
-            import traceback
-            print(f"Login error: {type(e).__name__}: {str(e)}")
-            if hasattr(e, 'detail'):
-                print(f"Error detail: {e.detail}")
-            print(f"Traceback: {traceback.format_exc()}")
-            
-            # Extract error message from exception
-            error_message = 'Invalid email or password. Please check your credentials and try again.'
-            
-            if isinstance(e, SerializerValidationError):
-                error_detail = e.detail
-                if isinstance(error_detail, list):
-                    error_message = '; '.join(str(msg) for msg in error_detail)
-                elif isinstance(error_detail, dict):
-                    # Handle field errors - filter out 'username' errors since we use 'email'
-                    error_messages = []
-                    for field, errors in error_detail.items():
-                        # Skip 'username' field errors as we use email for authentication
-                        if field == 'username':
-                            continue
-                        if isinstance(errors, list):
-                            error_messages.extend([str(err) for err in errors])
-                        else:
-                            error_messages.append(str(errors))
-                    # If no other errors, provide a generic message
-                    error_message = '; '.join(error_messages) if error_messages else error_message
-                else:
-                    error_message = str(error_detail)
-            elif hasattr(e, 'detail'):
-                if isinstance(e.detail, list):
-                    error_message = '; '.join(str(msg) for msg in e.detail)
-                elif isinstance(e.detail, dict):
-                    error_messages = []
-                    for field, errors in e.detail.items():
-                        if field == 'username':
-                            continue
-                        if isinstance(errors, list):
-                            error_messages.extend([str(err) for err in errors])
-                        else:
-                            error_messages.append(str(errors))
-                    error_message = '; '.join(error_messages) if error_messages else error_message
-                else:
-                    error_message = str(e.detail)
-            else:
-                error_message = str(e) if str(e) else error_message
-            
-            return Response(
-                {'detail': error_message, 'message': error_message},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+                    user = User.objects.get(email=email)
+                    ActivityLog.objects.create(
+                        user=user,
+                        action='login',
+                        object_repr=f"Login from {request.META.get('REMOTE_ADDR')}",
+                        ip_address=request.META.get('REMOTE_ADDR'),
+                        user_agent=request.META.get('HTTP_USER_AGENT', '')
+                    )
+                    user.last_login_ip = request.META.get('REMOTE_ADDR')
+                    user.failed_login_attempts = 0
+                    user.account_locked_until = None
+                    user.save(update_fields=['last_login_ip', 'failed_login_attempts', 'account_locked_until'])
+            except User.DoesNotExist:
+                pass
+        else:
+            email = request.data.get('email') or request.data.get('username')
+            if email:
+                try:
+                    user = User.objects.get(email=email)
+                    user.failed_login_attempts += 1
+                    if user.failed_login_attempts >= 5:
+                        user.account_locked_until = timezone.now() + timedelta(minutes=15)
+                    user.save(update_fields=['failed_login_attempts', 'account_locked_until'])
+                except User.DoesNotExist:
+                    pass
+
+        return response
 
 
 class RegisterView(generics.CreateAPIView):

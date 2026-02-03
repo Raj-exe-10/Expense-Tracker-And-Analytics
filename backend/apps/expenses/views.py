@@ -10,10 +10,11 @@ import logging
 
 from .models import Expense, ExpenseShare, RecurringExpense, ExpenseComment
 from .serializers import (
-    ExpenseSerializer, ExpenseShareSerializer, 
+    ExpenseSerializer, ExpenseShareSerializer,
     RecurringExpenseSerializer, ExpenseCommentSerializer
 )
 from .mixins import ExpenseFilterMixin
+from .services import ExpenseService
 from apps.groups.models import Group, GroupMembership
 
 logger = logging.getLogger(__name__)
@@ -42,80 +43,20 @@ class ExpenseViewSet(ExpenseFilterMixin, viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         expense = serializer.save(paid_by=self.request.user)
-        
-        # Auto-create equal shares if group expense and no shares_data provided
-        # The serializer's create method handles shares_data if provided
-        if expense.group and not serializer.validated_data.get('shares_data'):
-            self.create_equal_shares(expense)
-        
-        # Update group's total_expenses if this is a group expense
-        if expense.group:
-            try:
-                expense.group.update_total_expenses()
-            except Exception as e:
-                logger.warning(f"Failed to update group total expenses: {e}")
-        
-        # Create notifications for relevant users
-        try:
-            from apps.notifications.services import NotificationService
-            logger.info(f"Creating notifications for new expense {expense.id} by user {self.request.user.id}")
-            notifications = NotificationService.notify_expense_added(expense, self.request.user)
-            logger.info(f"Created {len(notifications)} notifications for expense {expense.id}")
-        except Exception as e:
-            logger.error(f"Failed to create expense notifications: {e}", exc_info=True)
-    
+        ExpenseService.after_create(
+            expense,
+            serializer.validated_data,
+            self.request.user,
+        )
+
     def perform_update(self, serializer):
         expense = serializer.save()
-        
-        # Update group's total_expenses if this is a group expense
-        if expense.group:
-            try:
-                expense.group.update_total_expenses()
-            except Exception as e:
-                logger.warning(f"Failed to update group total expenses: {e}")
-        
-        # Create notifications for relevant users
-        try:
-            from apps.notifications.services import NotificationService
-            logger.info(f"Creating update notifications for expense {expense.id} by user {self.request.user.id}")
-            notifications = NotificationService.notify_expense_updated(expense, self.request.user)
-            logger.info(f"Created {len(notifications)} update notifications for expense {expense.id}")
-        except Exception as e:
-            logger.error(f"Failed to create expense update notifications: {e}", exc_info=True)
-    
+        ExpenseService.after_update(expense, self.request.user)
+
     def perform_destroy(self, instance):
-        # Store group reference before deleting
         group = instance.group
-        
-        # Delete the expense
         instance.delete()
-        
-        # Update group's total_expenses if this was a group expense
-        if group:
-            try:
-                group.update_total_expenses()
-            except Exception as e:
-                logger.warning(f"Failed to update group total expenses after deletion: {e}")
-    
-    def create_equal_shares(self, expense):
-        """Create equal shares for all group members"""
-        group_memberships = expense.group.memberships.filter(is_active=True)
-        member_count = group_memberships.count()
-        if member_count == 0:
-            return
-        
-        share_amount = expense.amount / member_count
-        
-        for membership in group_memberships:
-            ExpenseShare.objects.get_or_create(
-                expense=expense,
-                user=membership.user,
-                defaults={
-                    'amount': share_amount,
-                    'currency': expense.currency,
-                    'paid_by': expense.paid_by
-                }
-            )
+        ExpenseService.after_destroy(group)
     
     @action(detail=True, methods=['post'])
     def settle(self, request, pk=None):
@@ -206,29 +147,30 @@ class ExpenseViewSet(ExpenseFilterMixin, viewsets.ModelViewSet):
                 )
         
         shares_data = request.data.get('shares', [])
-        
+
         if not shares_data:
             return Response(
                 {'error': 'No share data provided'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        total_amount = sum(share['amount'] for share in shares_data)
-        if abs(total_amount - float(expense.amount)) > 0.01:
+
+        total_amount = sum(Decimal(str(share['amount'])) for share in shares_data)
+        expense_total = Decimal(str(expense.amount))
+        if abs(total_amount - expense_total) >= Decimal('0.01'):
             return Response(
                 {'error': 'Share amounts do not match expense total'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         # Delete existing shares
         expense.shares.all().delete()
-        
+
         # Create new shares
         for share_data in shares_data:
             ExpenseShare.objects.create(
                 expense=expense,
                 user_id=share_data['user_id'],
-                amount=share_data['amount'],
+                amount=Decimal(str(share_data['amount'])),
                 currency=expense.currency,
                 paid_by=expense.paid_by
             )
@@ -250,8 +192,8 @@ class ExpenseViewSet(ExpenseFilterMixin, viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        total_percentage = sum(share['percentage'] for share in shares_data)
-        if abs(total_percentage - 100) > 0.01:
+        total_percentage = sum(Decimal(str(share['percentage'])) for share in shares_data)
+        if abs(total_percentage - Decimal('100')) >= Decimal('0.01'):
             return Response(
                 {'error': 'Percentages do not add up to 100%'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -314,13 +256,13 @@ class ExpenseViewSet(ExpenseFilterMixin, viewsets.ModelViewSet):
         ).order_by('expense_date')
         
         stats = {
-            'total_expenses': float(expenses['total_expenses'] or 0),
+            'total_expenses': (expenses['total_expenses'] or Decimal('0')),
             'expense_count': expenses['expense_count'] or 0,
-            'average_expense': float(expenses['average_expense'] or 0),
+            'average_expense': (expenses['average_expense'] or Decimal('0')),
             'by_category': list(category_stats),
             'by_group': list(group_stats),
             'daily_expenses': [
-                {'date': item['expense_date'].isoformat(), 'total': float(item['total'])}
+                {'date': item['expense_date'].isoformat(), 'total': (item['total'] or Decimal('0'))}
                 for item in daily_expenses
             ]
         }
@@ -560,9 +502,9 @@ class ExpenseShareViewSet(viewsets.ModelViewSet):
                     'you_owe': 0,
                     'net_balance': 0
                 }
-            balances[creator_id]['you_owe'] = float(share['total_owed'])
+            balances[creator_id]['you_owe'] = Decimal(str(share['total_owed']))
         
-        # Calculate net balances
+        # Calculate net balances (Decimal math)
         for user_id in balances:
             balances[user_id]['net_balance'] = (
                 balances[user_id]['owes_you'] - balances[user_id]['you_owe']
