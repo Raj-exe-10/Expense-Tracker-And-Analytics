@@ -42,34 +42,33 @@ Or use this online tool: https://djecrety.ir/
 Before deploying to production:
 
 ### Backend Security
-- [ ] Set `DEBUG=False` in production
-- [ ] Generate and use a strong `SECRET_KEY`
-- [ ] Configure `ALLOWED_HOSTS` with your domain
-- [ ] Use PostgreSQL or MySQL instead of SQLite
-- [ ] Enable HTTPS and set security headers
-- [ ] Configure CORS properly (don't use `CORS_ALLOW_ALL_ORIGINS` in production)
-- [ ] Set up proper email backend (not console backend)
-- [ ] Configure secure session and CSRF cookies
-- [ ] Enable security middleware settings
+- [ ] **Debug Mode**: Ensure `DEBUG=False` in production to prevent leaking sensitive variables.
+- [ ] **Secret Keys**: Generate and use a strong, unique `SECRET_KEY`.
+- [ ] **Allowed Hosts**: specific `ALLOWED_HOSTS` with your domain(s).
+- [ ] **Database**: Use PostgreSQL (not SQLite) with strong credentials.
+- [ ] **HTTPS**: Enforce HTTPS and set HSTS headers.
+- [ ] **CORS**: Configure `CORS_ALLOWED_ORIGINS` strictly (no `*`).
+- [ ] **Email**: Use a production-grade email backend (e.g., AWS SES, SendGrid).
+- [ ] **Cookies**: Set `SESSION_COOKIE_SECURE=True` and `CSRF_COOKIE_SECURE=True`.
+- [ ] **Security Headers**: Enable `SECURE_BROWSER_XSS_FILTER` and `SECURE_CONTENT_TYPE_NOSNIFF`.
 
 ### Frontend Security
-- [ ] Update `REACT_APP_API_URL` to use HTTPS
-- [ ] Build production bundle with `npm run build`
-- [ ] Serve static files securely
-- [ ] Implement Content Security Policy (CSP)
+- [ ] **API URL**: Update `REACT_APP_API_URL` to the HTTPS production endpoint.
+- [ ] **Dependencies**: Audit `package.json` for vulnerabilities (`npm audit`).
+- [ ] **CSP**: Implement a strict Content Security Policy (CSP).
+- [ ] **Sanitization**: Ensure all user input rendered is sanitized (React does this mostly, but be careful with `dangerouslySetInnerHTML`).
 
-### Database Security
-- [ ] Use strong database passwords
-- [ ] Enable SSL/TLS for database connections
-- [ ] Regular database backups
-- [ ] Restrict database access to application servers only
+### Database & Data
+- [ ] **Access Control**: Restrict database port access to application servers.
+- [ ] **Backups**: Schedule automated, encrypted backups.
+- [ ] **Encryption**: Encrypt sensitive fields (like API keys) at rest.
+- [ ] **SSL**: Enforce SSL for database connections.
 
-### API Security
-- [ ] Use API keys for external services
-- [ ] Implement rate limiting
-- [ ] Use JWT tokens with appropriate expiration
-- [ ] Validate and sanitize all user inputs
-- [ ] Implement proper authentication and authorization
+### API & Auth
+- [ ] **Rate Limiting**: Enable throttling for all API endpoints.
+- [ ] **JWT**: Set appropriate expiration times for Access (short) and Refresh (long) tokens.
+- [ ] **Validation**: strictly validate all incoming data.
+- [ ] **Scopes**: Use granular permissions/scopes where possible.
 
 ## Sensitive Files to Never Commit
 

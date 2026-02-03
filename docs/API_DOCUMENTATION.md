@@ -546,6 +546,11 @@ Get list of expenses with filtering and pagination.
         "icon": "restaurant",
         "color": "#FF6B6B"
       },
+      "user_category": {
+        "id": "ucat_123",
+        "name": "Weeknight Dinners",
+        "wallet": "Groceries"
+      },
       "expense_type": "group",
       "group": {
         "id": "grp_abc123",
@@ -1649,6 +1654,113 @@ Update notification preferences.
 {
   "status": "success",
   "message": "Preferences updated successfully"
+}
+```
+
+---
+
+
+## Budget API
+
+### 1. List Wallets
+**GET** `/wallets/`
+
+Get all wallets (envelopes) for the current user.
+
+#### Response (200 OK)
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "id": "wlt_abc123",
+      "name": "Groceries",
+      "wallet_type": "regular",
+      "rollover_enabled": true,
+      "order": 1,
+      "color": "#4CAF50",
+      "current_balance": "150.00"
+    }
+  ]
+}
+```
+
+### 2. Create Wallet
+**POST** `/wallets/`
+
+Create a new wallet.
+
+#### Request Body
+```json
+{
+  "name": "Travel Fund",
+  "wallet_type": "sinking_fund",
+  "rollover_enabled": false,
+  "color": "#2196F3"
+}
+```
+
+### 3. Get Monthly Budget
+**GET** `/monthly-budgets/`
+
+Get monthly budget overview.
+
+#### Query Parameters
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `year` | integer | Filter by year |
+| `month` | integer | Filter by month |
+
+#### Response (200 OK)
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "id": "mb_2024_01",
+      "year": 2024,
+      "month": 1,
+      "total_amount": "5000.00",
+      "unassigned_amount": "500.00",
+      "allocations": [
+        {
+          "wallet_id": "wlt_abc123",
+          "amount": "400.00",
+          "spent": "250.00",
+          "remaining": "150.00"
+        }
+      ]
+    }
+  ]
+}
+```
+
+### 4. Create/Update Allocation
+**POST** `/allocations/`
+
+Set allocation for a wallet in a monthly budget.
+
+#### Request Body
+```json
+{
+  "monthly_budget_id": "mb_2024_01",
+  "wallet_id": "wlt_abc123",
+  "amount": "450.00"
+}
+```
+
+### 5. Add Wallet Adjustment
+**POST** `/adjustments/`
+
+Add a one-time adjustment (whammy/boost) to a wallet.
+
+#### Request Body
+```json
+{
+  "monthly_budget_id": "mb_2024_01",
+  "wallet_id": "wlt_abc123",
+  "amount": "-50.00",
+  "note": "Unexpected fee"
 }
 ```
 

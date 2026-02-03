@@ -350,6 +350,7 @@ erDiagram
 | `amount` | DECIMAL(15,2) | NOT NULL, CHECK > 0 | Expense amount |
 | `currency_id` | UUID | FK(currencies), NOT NULL | Currency |
 | `category_id` | UUID | FK(categories) | Category |
+| `user_category_id` | UUID | FK(budget_user_categories) | User-defined category |
 | `expense_type` | VARCHAR(20) | DEFAULT 'individual' | Type (individual/group/recurring) |
 | `group_id` | UUID | FK(groups) | Associated group |
 | `paid_by_id` | BIGINT | FK(auth_user), NOT NULL | Payer |
@@ -876,6 +877,89 @@ erDiagram
 **Indexes**:
 - `idx_log_notification` ON (`notification_id`, `delivery_method`)
 - `idx_log_status` ON (`status`, `sent_at`)
+
+---
+
+
+## Budget Domain
+
+### 📊 Table: `budget_wallets`
+**Description**: User-level wallets (envelopes)
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | UUID | PRIMARY KEY | UUID identifier |
+| `user_id` | BIGINT | FK(auth_user), NOT NULL | Owner |
+| `name` | VARCHAR(100) | NOT NULL | Wallet name |
+| `wallet_type` | VARCHAR(20) | DEFAULT 'regular' | Type (regular/sinking_fund) |
+| `rollover_enabled` | BOOLEAN | DEFAULT FALSE | Rollover enabled |
+| `order` | INTEGER | DEFAULT 0 | Display order |
+| `color` | VARCHAR(7) | DEFAULT '#4CAF50' | Hex color |
+| `icon` | VARCHAR(50) | | Icon identifier |
+| `created_at` | TIMESTAMP | NOT NULL | Creation time |
+| `updated_at` | TIMESTAMP | NOT NULL | Update time |
+
+**Constraints**:
+- UNIQUE (`user_id`, `name`)
+
+### 📊 Table: `budget_monthly_budgets`
+**Description**: Monthly budget caps
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | UUID | PRIMARY KEY | UUID identifier |
+| `user_id` | BIGINT | FK(auth_user), NOT NULL | Owner |
+| `year` | INTEGER | NOT NULL | Year |
+| `month` | INTEGER | NOT NULL | Month (1-12) |
+| `total_amount` | DECIMAL(15,2) | DEFAULT 0 | Total budget cap |
+| `currency_id` | UUID | FK(currencies), NOT NULL | Currency |
+| `created_at` | TIMESTAMP | NOT NULL | Creation time |
+| `updated_at` | TIMESTAMP | NOT NULL | Update time |
+
+**Constraints**:
+- UNIQUE (`user_id`, `year`, `month`)
+
+### 📊 Table: `budget_wallet_allocations`
+**Description**: Monthly allocations per wallet
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | UUID | PRIMARY KEY | UUID identifier |
+| `monthly_budget_id` | UUID | FK(budget_monthly_budgets) | Parent budget |
+| `wallet_id` | UUID | FK(budget_wallets) | Target wallet |
+| `amount` | DECIMAL(15,2) | DEFAULT 0 | Assigned amount |
+| `rollover_from_previous` | DECIMAL(15,2) | DEFAULT 0 | Rollover amount |
+| `accumulated_balance` | DECIMAL(15,2) | DEFAULT 0 | Sinking fund balance |
+| `created_at` | TIMESTAMP | NOT NULL | Creation time |
+| `updated_at` | TIMESTAMP | NOT NULL | Update time |
+
+**Constraints**:
+- UNIQUE (`monthly_budget_id`, `wallet_id`)
+
+### 📊 Table: `budget_wallet_adjustments`
+**Description**: One-time adjustments to wallets
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | UUID | PRIMARY KEY | UUID identifier |
+| `monthly_budget_id` | UUID | FK(budget_monthly_budgets) | Parent budget |
+| `wallet_id` | UUID | FK(budget_wallets) | Target wallet |
+| `amount` | DECIMAL(15,2) | NOT NULL | Amount (+/-) |
+| `note` | VARCHAR(200) | | Adjustment note |
+| `created_at` | TIMESTAMP | NOT NULL | Creation time |
+| `updated_at` | TIMESTAMP | NOT NULL | Update time |
+
+### 📊 Table: `budget_user_categories`
+**Description**: User-defined categories within wallets
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | UUID | PRIMARY KEY | UUID identifier |
+| `user_id` | BIGINT | FK(auth_user), NOT NULL | Owner |
+| `wallet_id` | UUID | FK(budget_wallets), NOT NULL | Parent wallet |
+| `name` | VARCHAR(100) | NOT NULL | Category name |
+| `icon` | VARCHAR(50) | | Icon identifier |
+| `color` | VARCHAR(7) | | Hex color |
+| `created_at` | TIMESTAMP | NOT NULL | Creation time |
+| `updated_at` | TIMESTAMP | NOT NULL | Update time |
+
+**Constraints**:
+- UNIQUE (`wallet_id`, `name`)
 
 ---
 

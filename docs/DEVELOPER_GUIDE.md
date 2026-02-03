@@ -203,6 +203,11 @@ backend/
 │   │   ├── tasks.py  # Email/SMS sending
 │   │   └── tests.py
 │   │
+│   ├── budget/        # Envelope budgeting
+│   │   ├── models.py # Wallet, Allocation models
+│   │   ├── views.py  # Budget endpoints
+│   │   └── tests.py
+│   │
 │   └── core/         # Shared functionality
 │       ├── models.py # Base models, Currency, Category
 │       ├── utils.py  # Utility functions
@@ -421,6 +426,15 @@ CREATE INDEX idx_groups_name_search ON groups USING gin(to_tsvector('english', n
 │   ├── GET    /trends/            # Get spending trends
 │   ├── GET    /categories/        # Category breakdown
 │   └── POST   /reports/generate/  # Generate report
+│
+├── /wallets/
+│   ├── GET    /                   # List wallets
+│   ├── POST   /                   # Create wallet
+│   └── PUT    /{id}/              # Update wallet
+│
+├── /monthly-budgets/
+│   ├── GET    /                   # Get monthly budgets
+│   └── POST   /allocations/       # Set allocations
 │
 └── /notifications/
     ├── GET    /                   # List notifications

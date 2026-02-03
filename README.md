@@ -19,6 +19,13 @@ A comprehensive expense tracking and bill splitting application similar to Split
 - ✅ Data export (CSV, PDF)
 - ✅ Activity feeds and comments
 
+### 💰 Envelope Budgeting System (New!)
+- ✅ Zero-based budgeting with monthly caps
+- ✅ Wallet/Envelope management for different categories
+- ✅ Sinking funds for long-term savings
+- ✅ Rollover support for unused budget
+- ✅ One-time "whammy" adjustments
+
 ### Technical Stack
 - **Backend**: Django 4.2 + Django REST Framework
 - **Frontend**: React 18 + TypeScript
@@ -44,6 +51,7 @@ expense_tracker_app/
 │   │   ├── payments/        # Payment processing
 │   │   ├── analytics/       # Analytics and reporting
 │   │   ├── notifications/   # Notification system
+│   │   ├── budget/          # Envelope budgeting system
 │   │   └── core/           # Core utilities and models
 │   ├── media/              # User uploaded files
 │   ├── static/             # Static files

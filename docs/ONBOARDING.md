@@ -27,6 +27,7 @@ The Expense Tracker is a comprehensive bill-splitting and expense management app
 - Manage multi-currency transactions
 - Analyze spending patterns
 - Process payments and settlements
+- Manage budgets using the envelope system
 
 ### 📋 Quick Facts
 
