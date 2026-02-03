@@ -68,6 +68,10 @@ erDiagram
     User ||--o{ Settlement : participates
     User ||--o{ Payment : makes
     
+    User ||--o{ Wallet : owns
+    User ||--o{ MonthlyBudget : plans
+    User ||--o{ UserCategory : defines
+    
     Group ||--o{ GroupMembership : contains
     Group ||--o{ GroupInvitation : has
     Group ||--o{ GroupActivity : tracks
@@ -77,6 +81,7 @@ erDiagram
     Expense ||--o{ ExpenseShare : splits
     Expense ||--o{ ExpenseComment : has
     Expense }o--|| Category : categorized
+    Expense }o--|| UserCategory : categorized_by_user
     Expense }o--|| Currency : priced
     Expense }o--o{ Tag : tagged
     
@@ -89,6 +94,15 @@ erDiagram
     RecurringExpense ||--o{ Expense : generates
     
     Category ||--o{ Category : contains
+    Category ||--o{ WalletCategory : assigned_to
+
+    Wallet ||--o{ WalletCategory : contains
+    Wallet ||--o{ WalletAllocation : allocated
+    Wallet ||--o{ WalletAdjustment : adjusted_by
+    Wallet ||--o{ UserCategory : contains
+
+    MonthlyBudget ||--o{ WalletAllocation : defines
+    MonthlyBudget ||--o{ WalletAdjustment : modifies
     
     NotificationTemplate ||--o{ Notification : generates
     Notification ||--o{ NotificationLog : tracks

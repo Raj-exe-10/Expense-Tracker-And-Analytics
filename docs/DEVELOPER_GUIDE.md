@@ -52,6 +52,7 @@ graph TB
         DJANGO[Django REST API]
         CELERY[Celery Workers]
         BEAT[Celery Beat Scheduler]
+        BUDGET[Budget Service]
     end
     
     subgraph "Data Layer"
@@ -295,6 +296,9 @@ erDiagram
     User ||--o{ PaymentMethod : owns
     User ||--o{ Notification : receives
     User ||--|| UserProfile : has
+    User ||--o{ Wallet : owns
+    User ||--o{ MonthlyBudget : plans
+    User ||--o{ UserCategory : defines
     
     Group ||--o{ GroupMembership : contains
     Group ||--o{ Expense : has
@@ -303,7 +307,16 @@ erDiagram
     Expense ||--o{ ExpenseShare : splits_into
     Expense ||--o{ ExpenseComment : has
     Expense }o--|| Category : belongs_to
+    Expense }o--|| UserCategory : categorized_by_user
     Expense }o--|| Currency : uses
+    
+    Category ||--o{ WalletCategory : assigned_to
+
+    Wallet ||--o{ WalletCategory : contains
+    Wallet ||--o{ WalletAllocation : allocated
+    Wallet ||--o{ UserCategory : contains
+
+    MonthlyBudget ||--o{ WalletAllocation : defines
     
     ExpenseShare }o--|| Settlement : settled_by
     
