@@ -31,6 +31,7 @@ import {
   Group,
   Analytics,
   AccountBalance,
+  Savings,
   Settings,
   ExitToApp,
   Person,
@@ -80,6 +81,7 @@ interface MenuItem {
 const menuItems: MenuItem[] = [
   { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard' },
   { text: 'Expenses', icon: <Receipt />, path: '/expenses' },
+  { text: 'Budget', icon: <Savings />, path: '/budget' },
   { text: 'Groups', icon: <Group />, path: '/groups' },
   { text: 'Analytics', icon: <Analytics />, path: '/analytics' },
   { text: 'Settlements', icon: <AccountBalance />, path: '/settlements' },

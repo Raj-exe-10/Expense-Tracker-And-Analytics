@@ -23,6 +23,10 @@ class Notification(UUIDModel, TimeStampedModel):
         ('settlement_completed', 'Settlement Completed'),
         ('reminder', 'Reminder'),
         ('system', 'System Notification'),
+        # Budget / envelope alerts
+        ('budget_velocity_alert', 'Budget Velocity Alert'),
+        ('budget_threshold_alert', 'Budget Threshold Alert'),
+        ('budget_unassigned_reminder', 'Unassigned Budget Reminder'),
     ]
     
     PRIORITY_LEVELS = [

@@ -56,7 +56,7 @@ import { useAppDispatch, useAppSelector } from '../../hooks/redux';
 import { createExpense, updateExpense } from '../../store/slices/expenseSlice';
 import { fetchCurrencies, fetchCategories } from '../../store/slices/coreSlice';
 import { fetchGroups, fetchGroupMembers } from '../../store/slices/groupSlice';
-import { groupsAPI } from '../../services/api';
+import { groupsAPI, budgetAPI } from '../../services/api';
 import { formatAmount } from '../../utils/formatting';
 import { sanitizeInput } from '../../utils/sanitize';
 
@@ -124,6 +124,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
     date: new Date(),
     currency_id: defaultCurrency?.id ? String(defaultCurrency.id) : '',
     category_id: '',
+    user_category_id: '' as string,
     group_id: '',
     notes: '',
     tags: [] as string[],
@@ -141,12 +142,16 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [userCategories, setUserCategories] = useState<{ id: string; name: string; wallet: string }[]>([]);
   
-  // Fetch currencies, categories, and groups on mount
+  // Fetch currencies, categories, groups, and budget user categories on mount
   useEffect(() => {
     dispatch(fetchCurrencies());
     dispatch(fetchCategories());
     dispatch(fetchGroups());
+    budgetAPI.getUserCategories()
+      .then((data: any) => setUserCategories(Array.isArray(data) ? data : data?.results ?? []))
+      .catch(() => setUserCategories([]));
   }, [dispatch]);
 
   // Set current user as default payer
@@ -161,14 +166,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
       const expenseDate = currentExpense.date || currentExpense.expense_date;
       const groupId = currentExpense.group?.id ? String(currentExpense.group.id) : '';
       const categoryId = currentExpense.category?.id ? String(currentExpense.category.id) : '';
-      
-      console.log('Edit mode - Loading expense:', {
-        group_id: groupId,
-        category_id: categoryId,
-        group: currentExpense.group,
-        category: currentExpense.category,
-        availableGroups: groups.length,
-      });
+      const userCategoryId = (currentExpense as any).user_category?.id ? String((currentExpense as any).user_category.id) : '';
       
       setFormData({
         title: currentExpense.title || currentExpense.description || '',
@@ -176,7 +174,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
         amount: currentExpense.amount.toString(),
         date: expenseDate ? new Date(expenseDate) : new Date(),
         currency_id: currentExpense.currency?.id ? String(currentExpense.currency.id) : (defaultCurrency?.id ? String(defaultCurrency.id) : ''),
-        category_id: categoryId,
+        category_id: userCategoryId ? '' : categoryId,
+        user_category_id: userCategoryId,
         group_id: groupId,
         notes: currentExpense.description || '',
         tags: currentExpense.tags || [],
@@ -498,9 +497,11 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
       currency: getCurrencyId(),
     };
     
-    const categoryId = getCategoryId();
-    if (categoryId) {
-      expenseData.category_id = categoryId;
+    if (formData.user_category_id) {
+      expenseData.user_category_id = formData.user_category_id;
+    } else {
+      const categoryId = getCategoryId();
+      if (categoryId) expenseData.category_id = categoryId;
     }
     
     const groupId = getGroupId();
@@ -537,6 +538,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
         const result = await dispatch(updateExpense({ id, data: requestData }));
         if (updateExpense.fulfilled.match(result)) {
           setSuccessMessage('Expense updated successfully!');
+          window.dispatchEvent(new CustomEvent('expenseSaved'));
           setTimeout(() => {
             if (onSuccess) {
               onSuccess(result.payload);
@@ -556,6 +558,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
         const result = await dispatch(createExpense(requestData));
         if (createExpense.fulfilled.match(result)) {
           setSuccessMessage('Expense added successfully!');
+          window.dispatchEvent(new CustomEvent('expenseSaved'));
           setTimeout(() => {
             if (onSuccess) {
               onSuccess(result.payload);
@@ -730,15 +733,35 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
                           native
                           labelId="category-select-label"
                           id="category-select"
-                          value={formData.category_id}
+                          value={
+                            formData.user_category_id
+                              ? `u_${formData.user_category_id}`
+                              : formData.category_id
+                                ? `s_${formData.category_id}`
+                                : ''
+                          }
                           label="Category"
                           onChange={(e) => {
-                            const selectedValue = e.target.value as string;
-                            console.log('Category selected:', selectedValue);
-                            setFormData(prev => ({
-                              ...prev,
-                              category_id: selectedValue,
-                            }));
+                            const selectedValue = (e.target.value as string) || '';
+                            if (selectedValue.startsWith('u_')) {
+                              setFormData(prev => ({
+                                ...prev,
+                                user_category_id: selectedValue.slice(2),
+                                category_id: '',
+                              }));
+                            } else if (selectedValue.startsWith('s_')) {
+                              setFormData(prev => ({
+                                ...prev,
+                                category_id: selectedValue.slice(2),
+                                user_category_id: '',
+                              }));
+                            } else {
+                              setFormData(prev => ({
+                                ...prev,
+                                category_id: '',
+                                user_category_id: '',
+                              }));
+                            }
                           }}
                           inputProps={{
                             id: 'category-native-select',
@@ -746,13 +769,20 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
                         >
                           <option value="">No Category</option>
                           {categoriesArray.map((category: any) => (
-                            <option 
-                              key={`category-option-${category.id}`} 
-                              value={String(category.id)}
-                            >
+                            <option key={`category-option-s-${category.id}`} value={`s_${category.id}`}>
                               {category.name}
                             </option>
                           ))}
+                          {userCategories.length > 0 && (
+                            <>
+                              <option disabled>── Your categories ──</option>
+                              {userCategories.map((uc) => (
+                                <option key={`category-option-u-${uc.id}`} value={`u_${uc.id}`}>
+                                  {uc.name} (custom)
+                                </option>
+                              ))}
+                            </>
+                          )}
                         </Select>
                       </FormControl>
                     </Grid>

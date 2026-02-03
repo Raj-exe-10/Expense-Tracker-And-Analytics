@@ -26,6 +26,7 @@ import ExpenseDetail from './pages/ExpenseDetail';
 import Groups from './pages/Groups';
 import JoinGroup from './pages/JoinGroup';
 import Analytics from './pages/Analytics';
+import Budget from './pages/Budget';
 import Settings from './pages/Settings';
 import Settlements from './pages/Settlements';
 import Profile from './pages/Profile';
@@ -254,6 +255,17 @@ function App() {
               <AuthWrapper>
                 <DashboardLayout>
                   <Analytics />
+                </DashboardLayout>
+              </AuthWrapper>
+            }
+          />
+          
+          <Route
+            path="/budget"
+            element={
+              <AuthWrapper>
+                <DashboardLayout>
+                  <Budget />
                 </DashboardLayout>
               </AuthWrapper>
             }

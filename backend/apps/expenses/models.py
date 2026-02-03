@@ -66,6 +66,13 @@ class Expense(UUIDModel, TimeStampedModel):
         blank=True,
         related_name='expenses'
     )
+    user_category = models.ForeignKey(
+        'budget.UserCategory',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='expenses'
+    )
     tags = models.ManyToManyField(
         Tag,
         blank=True,

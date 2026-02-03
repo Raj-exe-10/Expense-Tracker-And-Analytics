@@ -21,6 +21,7 @@ class ExpenseFilterMixin:
         ).select_related(
             'paid_by',
             'category',
+            'user_category',
             'currency',
             'group'
         ).prefetch_related(

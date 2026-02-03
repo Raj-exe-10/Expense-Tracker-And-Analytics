@@ -81,6 +81,8 @@ class ExpenseSerializer(serializers.ModelSerializer):
     created_by = serializers.SerializerMethodField()  # Alias for paid_by for backward compatibility
     category = CategorySerializer(read_only=True)
     category_id = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
+    user_category = serializers.SerializerMethodField(read_only=True)
+    user_category_id = serializers.UUIDField(write_only=True, required=False, allow_null=True)
     # Read: return full group object, Write: accept group ID
     group = GroupSimpleSerializer(read_only=True)
     group_id = serializers.PrimaryKeyRelatedField(
@@ -121,7 +123,7 @@ class ExpenseSerializer(serializers.ModelSerializer):
         model = Expense
         fields = [
             'id', 'title', 'description', 'amount', 'currency', 'currency_id',
-            'expense_date', 'date', 'category', 'category_id', 
+            'expense_date', 'date', 'category', 'category_id', 'user_category', 'user_category_id',
             'group', 'group_id', 'paid_by', 'paid_by_id', 'created_by',
             'receipt', 'receipt_image', 'tags', 'tag_ids',
             'is_settled', 'shares', 'shares_data',
@@ -302,7 +304,16 @@ class ExpenseSerializer(serializers.ModelSerializer):
     def get_created_by(self, obj):
         """Return paid_by as created_by for backward compatibility"""
         return UserSimpleSerializer(obj.paid_by).data
-    
+
+    def get_user_category(self, obj):
+        """Return user_category for envelope budgeting (custom category in a wallet)."""
+        if not obj.user_category_id:
+            return None
+        uc = obj.user_category
+        if not uc:
+            return None
+        return {'id': str(uc.id), 'name': uc.name, 'icon': uc.icon or '', 'color': uc.color or ''}
+
     def get_comments_count(self, obj):
         return obj.comments.count()
     
@@ -333,7 +344,8 @@ class ExpenseSerializer(serializers.ModelSerializer):
         tag_ids = validated_data.pop('tag_ids', [])
         shares_data = validated_data.pop('shares_data', [])
         category_id = validated_data.pop('category_id', None)
-        
+        user_category_id = validated_data.pop('user_category_id', None)
+
         # Ensure expense_date is set - check both 'date' and 'expense_date'
         if 'expense_date' not in validated_data:
             if 'date' in validated_data:
@@ -341,9 +353,24 @@ class ExpenseSerializer(serializers.ModelSerializer):
             else:
                 from django.utils import timezone
                 validated_data['expense_date'] = timezone.now().date()
-        
-        # Set category if provided - category uses integer primary key
-        if category_id is not None:
+
+        # User category (envelope budget): takes precedence over category when set
+        if user_category_id:
+            try:
+                from apps.budget.models import UserCategory
+                request = self.context.get('request')
+                user = request.user if request else None
+                if user:
+                    uc = UserCategory.objects.filter(id=user_category_id, user=user).first()
+                    if uc:
+                        validated_data['user_category'] = uc
+                        validated_data['category'] = None
+                    # else ignore invalid user_category_id
+            except Exception:
+                pass
+
+        # Set category if provided - category uses integer primary key (when not using user_category)
+        if category_id is not None and not validated_data.get('user_category'):
             try:
                 from apps.core.models import Category
                 import logging
@@ -406,7 +433,7 @@ class ExpenseSerializer(serializers.ModelSerializer):
         if validated_data.get('group'):
             validated_data['expense_type'] = 'group'
         else:
-            validated_data['expense_type'] = 'personal'
+            validated_data['expense_type'] = 'individual'
         
         # Create expense (expense_date should already be set from to_internal_value or create method)
         # Use _skip_share_creation to prevent model's save() from auto-creating shares
@@ -462,7 +489,24 @@ class ExpenseSerializer(serializers.ModelSerializer):
         tag_ids = validated_data.pop('tag_ids', None)
         shares_data = validated_data.pop('shares_data', None)
         category_id = validated_data.pop('category_id', None)
+        user_category_id = validated_data.pop('user_category_id', None)
         paid_by_id = validated_data.pop('paid_by_id', None)
+
+        # User category (envelope budget)
+        if user_category_id is not None:
+            try:
+                from apps.budget.models import UserCategory
+                request = self.context.get('request')
+                user = request.user if request else None
+                if user:
+                    uc = UserCategory.objects.filter(id=user_category_id, user=user).first()
+                    validated_data['user_category'] = uc
+                    validated_data['category'] = None if uc else instance.category
+            except Exception:
+                pass
+        elif user_category_id is None and category_id is None and instance.user_category_id:
+            # Clear user_category if not sent (keep existing category logic separate)
+            validated_data['user_category'] = None
         
         # Handle paid_by_id - update the payer
         if paid_by_id is not None:
@@ -482,12 +526,14 @@ class ExpenseSerializer(serializers.ModelSerializer):
             if validated_data.get('group'):
                 validated_data['expense_type'] = 'group'
             else:
-                validated_data['expense_type'] = 'personal'
+                validated_data['expense_type'] = 'individual'
         
         # Update category - handle both setting and clearing (category uses integer primary key)
         import logging
         logger = logging.getLogger(__name__)
-        
+
+        if validated_data.get('user_category') is not None and category_id is not None:
+            category_id = None  # user_category took precedence
         if category_id is not None:
             # category_id is explicitly provided (could be empty string to clear)
             logger.info(f"Updating expense category: category_id={category_id}, type={type(category_id)}")

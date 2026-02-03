@@ -233,6 +233,64 @@ export const coreAPI = {
     api.get('/core/health/').then(res => res.data),
 };
 
+// Budget (Envelope) API
+export const budgetAPI = {
+  getWallets: () =>
+    api.get('/budget/wallets/').then(res => res.data),
+  createWallet: (data: { name: string; wallet_type?: string; rollover_enabled?: boolean; order?: number; color?: string }) =>
+    api.post('/budget/wallets/', data).then(res => res.data),
+  updateWallet: (id: string, data: any) =>
+    api.patch(`/budget/wallets/${id}/`, data).then(res => res.data),
+  deleteWallet: (id: string) =>
+    api.delete(`/budget/wallets/${id}/`).then(res => res.data),
+
+  getWalletCategories: (params?: any) =>
+    api.get('/budget/wallet-categories/', { params }).then(res => res.data),
+  assignCategoryToWallet: (data: { wallet: string; category: string }) =>
+    api.post('/budget/wallet-categories/', data).then(res => res.data),
+  removeWalletCategory: (id: string) =>
+    api.delete(`/budget/wallet-categories/${id}/`).then(res => res.data),
+
+  getUserCategories: (params?: any) =>
+    api.get('/budget/user-categories/', { params }).then(res => res.data),
+  createUserCategory: (data: { wallet: string; name: string; icon?: string; color?: string }) =>
+    api.post('/budget/user-categories/', data).then(res => res.data),
+  updateUserCategory: (id: string, data: any) =>
+    api.patch(`/budget/user-categories/${id}/`, data).then(res => res.data),
+  deleteUserCategory: (id: string) =>
+    api.delete(`/budget/user-categories/${id}/`).then(res => res.data),
+
+  getCurrentBudget: () =>
+    api.get('/budget/monthly-budgets/current/').then(res => res.data),
+  getBudgetByMonth: (year: number, month: number) =>
+    api.get('/budget/monthly-budgets/by-month/', { params: { year, month } }).then(res => res.data),
+  getMonthlyBudgets: (params?: any) =>
+    api.get('/budget/monthly-budgets/', { params }).then(res => res.data),
+  createMonthlyBudget: (data: { year: number; month: number; total_amount: string | number; currency: string }) =>
+    api.post('/budget/monthly-budgets/', data).then(res => res.data),
+  updateMonthlyBudget: (id: string, data: any) =>
+    api.patch(`/budget/monthly-budgets/${id}/`, data).then(res => res.data),
+  applyRollover: (budgetId: string) =>
+    api.post(`/budget/monthly-budgets/${budgetId}/apply-rollover/`).then(res => res.data),
+
+  getAllocations: (params?: any) =>
+    api.get('/budget/allocations/', { params }).then(res => res.data),
+  createAllocation: (data: { monthly_budget: string; wallet: string; amount: string | number }) =>
+    api.post('/budget/allocations/', data).then(res => res.data),
+  updateAllocation: (id: string, data: any) =>
+    api.patch(`/budget/allocations/${id}/`, data).then(res => res.data),
+  deleteAllocation: (id: string) =>
+    api.delete(`/budget/allocations/${id}/`).then(res => res.data),
+
+  getAdjustments: (params?: any) =>
+    api.get('/budget/adjustments/', { params }).then(res => res.data),
+  createAdjustment: (data: { monthly_budget: string; wallet: string; amount: number; note?: string }) =>
+    api.post('/budget/adjustments/', data).then(res => res.data),
+
+  getBudgetCategories: (walletId?: string) =>
+    api.get('/budget/categories/', { params: walletId ? { wallet_id: walletId } : {} }).then(res => res.data),
+};
+
 // Settlements API
 export const settlementsAPI = {
   getSettlements: (params?: any) =>
