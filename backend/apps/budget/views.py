@@ -111,7 +111,7 @@ class MonthlyBudgetViewSet(viewsets.ModelViewSet):
             now.month,
             currency,
         )
-        serializer = MonthlyBudgetSerializer(budget)
+        serializer = self.get_serializer(budget)
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'], url_path='by-month')
@@ -128,7 +128,7 @@ class MonthlyBudgetViewSet(viewsets.ModelViewSet):
         if not currency:
             return Response({'error': 'No currency.'}, status=status.HTTP_404_NOT_FOUND)
         budget = ensure_monthly_budget(request.user, year, month, currency)
-        serializer = MonthlyBudgetSerializer(budget)
+        serializer = self.get_serializer(budget)
         return Response(serializer.data)
 
     @action(detail=True, methods=['post'], url_path='apply-rollover')
@@ -146,7 +146,7 @@ class MonthlyBudgetViewSet(viewsets.ModelViewSet):
             budget.currency,
         )
         apply_rollover(request.user, budget.year, budget.month, next_budget)
-        serializer = MonthlyBudgetSerializer(next_budget)
+        serializer = self.get_serializer(next_budget)
         return Response(serializer.data)
 
 

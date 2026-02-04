@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from decimal import Decimal
 from .models import Expense, ExpenseShare, RecurringExpense, ExpenseComment
 from apps.core.models import Category, Currency, Tag
 from apps.groups.models import Group
@@ -339,6 +340,12 @@ class ExpenseSerializer(serializers.ModelSerializer):
         # The conversion will happen before this method is called
         return data
     
+    def validate_expense_date(self, value):
+        from django.utils import timezone
+        if value and value > timezone.now().date():
+            raise serializers.ValidationError("Expense date cannot be in the future.")
+        return value
+        
     def create(self, validated_data):
         # Extract nested data
         tag_ids = validated_data.pop('tag_ids', [])
@@ -353,6 +360,9 @@ class ExpenseSerializer(serializers.ModelSerializer):
             else:
                 from django.utils import timezone
                 validated_data['expense_date'] = timezone.now().date()
+        else:
+            # Re-validate here just in case (though field validator handles it)
+            self.validate_expense_date(validated_data['expense_date'])
 
         # User category (envelope budget): takes precedence over category when set
         if user_category_id:
@@ -365,44 +375,31 @@ class ExpenseSerializer(serializers.ModelSerializer):
                     if uc:
                         validated_data['user_category'] = uc
                         validated_data['category'] = None
-                    # else ignore invalid user_category_id
             except Exception:
                 pass
 
-        # Set category if provided - category uses integer primary key (when not using user_category)
+        # Set category if provided - category uses integer primary key
         if category_id is not None and not validated_data.get('user_category'):
             try:
                 from apps.core.models import Category
-                import logging
-                logger = logging.getLogger(__name__)
-                
-                # category_id should be an integer ID after to_internal_value conversion
                 cat_id = int(category_id) if isinstance(category_id, (int, float, str)) and str(category_id).strip() else None
                 
                 if cat_id:
-                    logger.info(f"Creating expense with category_id: {cat_id}")
                     category = Category.objects.filter(id=cat_id).first()
                     if category:
                         validated_data['category'] = category
-                        logger.info(f"Set category to: {category.name}")
-                    else:
-                        logger.warning(f"Category with id={cat_id} not found during create")
-            except (ValueError, TypeError) as e:
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.warning(f"Failed to set category from category_id={category_id}: {e}")
+            except (ValueError, TypeError):
+                pass
         
         # Ensure currency is set (required field)
-        # The PrimaryKeyRelatedField with source='currency' should have already set this
         currency_value = validated_data.get('currency')
         if not currency_value:
-            # Currency is missing - use default
             from apps.core.models import Currency
             default_currency = Currency.objects.filter(code='USD').first() or Currency.objects.first()
             if default_currency:
                 validated_data['currency'] = default_currency
             else:
-                raise serializers.ValidationError("Currency is required and no default currency found. Please run: python manage.py seed_currencies")
+                raise serializers.ValidationError("Currency is required.")
         
         # Handle paid_by_id - set the payer
         paid_by_id = validated_data.pop('paid_by_id', None)
@@ -413,30 +410,38 @@ class ExpenseSerializer(serializers.ModelSerializer):
                 payer = User.objects.get(id=paid_by_id)
                 validated_data['paid_by'] = payer
             except User.DoesNotExist:
-                pass  # Will fall back to request user in perform_create
+                pass
         
-        # Ensure JSON fields have default values if not provided (required by model validation)
-        # These fields cannot be blank, so we always set them to empty dict/list if not provided
+        # Determine Expense Type and Handle Splits
+        group = validated_data.get('group')
+        amount = validated_data.get('amount')
+        
+        if not group:
+            # PERSONAL / INDIVIDUAL EXPENSE
+            validated_data['expense_type'] = 'individual'
+            validated_data['split_type'] = 'equal' # Default
+            validated_data['split_data'] = {} # Ignore incoming split data
+            shares_data = [] # Ignore incoming shares
+        else:
+            # GROUP EXPENSE
+            validated_data['expense_type'] = 'group'
+            # Validation: Payer must be in group
+            payer = validated_data.get('paid_by')
+            if payer and not group.memberships.filter(user=payer).exists():
+                 raise serializers.ValidationError({"paid_by": "Payer must be a member of the selected group."})
+                 
+            # Validation: Split logic (if shares provided)
+            if shares_data:
+                total_share = sum(Decimal(str(s.get('amount', 0))) for s in shares_data)
+                if abs(total_share - amount) > Decimal('0.05'): # Allow small float diff
+                    raise serializers.ValidationError({"shares": f"Sum of shares ({total_share}) must equal total amount ({amount})."})
+
+        # Ensure JSON fields have default values
         validated_data.setdefault('split_data', {})
         validated_data.setdefault('attachments', [])
         validated_data.setdefault('ocr_data', {})
         
-        # Ensure they're not None (convert None to defaults)
-        if validated_data.get('split_data') is None:
-            validated_data['split_data'] = {}
-        if validated_data.get('attachments') is None:
-            validated_data['attachments'] = []
-        if validated_data.get('ocr_data') is None:
-            validated_data['ocr_data'] = {}
-        
-        # Set expense_type based on whether group is provided
-        if validated_data.get('group'):
-            validated_data['expense_type'] = 'group'
-        else:
-            validated_data['expense_type'] = 'individual'
-        
-        # Create expense (expense_date should already be set from to_internal_value or create method)
-        # Use _skip_share_creation to prevent model's save() from auto-creating shares
+        # Create expense 
         expense = Expense.objects.create(**validated_data)
         
         # Add tags
@@ -444,33 +449,9 @@ class ExpenseSerializer(serializers.ModelSerializer):
             tags = Tag.objects.filter(id__in=tag_ids)
             expense.tags.set(tags)
         
-        # Track user_ids to avoid duplicates (normalize to strings for comparison)
-        seen_user_ids = set()
-        
-        # Create shares if provided
-        if shares_data and len(shares_data) > 0:
-            for share_data in shares_data:
-                user_id = share_data.get('user_id')
-                if user_id:
-                    # Normalize user_id to string for comparison
-                    user_id_str = str(user_id)
-                    if user_id_str not in seen_user_ids:
-                        seen_user_ids.add(user_id_str)
-                        # Use get_or_create to avoid duplicate share errors
-                        ExpenseShare.objects.get_or_create(
-                            expense=expense,
-                            user_id=user_id,
-                            defaults={
-                                'amount': share_data.get('amount', 0),
-                                'currency': expense.currency,
-                                'paid_by': expense.paid_by
-                            }
-                        )
-        
-        # If no shares_data and it's an individual expense, create share for payer
-        # Only create if payer is not already in shares_data
-        payer_id_str = str(expense.paid_by.id)
-        if not expense.group and payer_id_str not in seen_user_ids:
+        # Create Shares
+        if not group:
+            # Use get_or_create to avoid duplicate share errors
             ExpenseShare.objects.get_or_create(
                 expense=expense,
                 user=expense.paid_by,
@@ -480,8 +461,30 @@ class ExpenseSerializer(serializers.ModelSerializer):
                     'paid_by': expense.paid_by
                 }
             )
-        # For group expenses without shares_data, let perform_create handle it via create_equal_shares
-        
+        else:
+             # Group Logic
+            if shares_data and len(shares_data) > 0:
+                seen_user_ids = set()
+                for share_data in shares_data:
+                    user_id = share_data.get('user_id')
+                    if user_id:
+                        user_id_str = str(user_id)
+                        if user_id_str not in seen_user_ids:
+                            seen_user_ids.add(user_id_str)
+                            ExpenseShare.objects.update_or_create(
+                                expense=expense,
+                                user_id=user_id,
+                                defaults={
+                                    'amount': share_data.get('amount', 0),
+                                    'currency': expense.currency,
+                                    'paid_by': expense.paid_by
+                                }
+                            )
+            else:
+                 # Default to equal split if no shares provided via simple logic
+                 # Or let viewset handle it, but here is cleanly encapsulated.
+                 pass # We assume frontend sends shares for group expenses usually.
+
         return expense
     
     def update(self, instance, validated_data):

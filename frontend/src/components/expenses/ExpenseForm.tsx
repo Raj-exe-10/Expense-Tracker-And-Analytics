@@ -34,6 +34,8 @@ import {
   Slider,
   Tooltip,
   Collapse,
+  ToggleButton,
+  ToggleButtonGroup,
 } from '@mui/material';
 import {
   AttachMoney,
@@ -89,34 +91,35 @@ interface GroupMember {
   role: string;
 }
 
-const ExpenseForm: React.FC<ExpenseFormProps> = ({ 
+const ExpenseForm: React.FC<ExpenseFormProps> = ({
   editMode = false,
   expenseId,
   duplicateData,
   onClose,
   onSuccess,
-  groups: propsGroups 
+  groups: propsGroups
 }) => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const { id: routeId } = useParams();
-  
+
   const { groups: storeGroups } = useAppSelector((state) => state.groups);
   const { categories, currencies, loading: coreLoading } = useAppSelector((state) => state.core);
   const { currentExpense, loading } = useAppSelector((state) => state.expenses);
   const { user: currentUser } = useAppSelector((state) => state.auth);
-  
+
   const id = expenseId || routeId || (editMode && currentExpense?.id ? currentExpense.id : undefined);
-  
-  const groups = Array.isArray(propsGroups) 
-    ? propsGroups 
+
+  const groups = Array.isArray(propsGroups)
+    ? propsGroups
     : (Array.isArray(storeGroups) ? storeGroups : []);
-  
+
   const currenciesArray = Array.isArray(currencies) ? currencies : [];
   const categoriesArray = Array.isArray(categories) ? categories : [];
-  
+
   const defaultCurrency = currenciesArray.find(c => c.code === 'USD') || currenciesArray[0];
-  
+
+  const [expenseMode, setExpenseMode] = useState<'personal' | 'group'>('personal');
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -132,7 +135,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
     is_recurring: false,
     split_type: 'equal' as 'equal' | 'amount' | 'percentage' | 'shares',
   });
-  
+
   const [shares, setShares] = useState<ExpenseShare[]>([]);
   const [paidBy, setPaidBy] = useState<string>('');
   const [groupMembers, setGroupMembers] = useState<GroupMember[]>([]);
@@ -143,7 +146,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [userCategories, setUserCategories] = useState<{ id: string; name: string; wallet: string }[]>([]);
-  
+
   // Fetch currencies, categories, groups, and budget user categories on mount
   useEffect(() => {
     dispatch(fetchCurrencies());
@@ -167,7 +170,10 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
       const groupId = currentExpense.group?.id ? String(currentExpense.group.id) : '';
       const categoryId = currentExpense.category?.id ? String(currentExpense.category.id) : '';
       const userCategoryId = (currentExpense as any).user_category?.id ? String((currentExpense as any).user_category.id) : '';
-      
+
+      // Determine mode based on group presence
+      setExpenseMode(groupId ? 'group' : 'personal');
+
       setFormData({
         title: currentExpense.title || currentExpense.description || '',
         description: currentExpense.description || '',
@@ -183,11 +189,13 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
         is_recurring: false,
         split_type: 'equal',
       });
-      
+
       if (currentExpense.paid_by) {
         setPaidBy(String(currentExpense.paid_by.id || currentExpense.paid_by));
       }
     } else if (duplicateData) {
+      const groupId = duplicateData.group_id || '';
+      setExpenseMode(groupId ? 'group' : 'personal');
       setFormData({
         ...duplicateData,
         date: new Date(),
@@ -204,7 +212,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
       setFormData(prev => ({ ...prev, group_id: groupId }));
     }
   }, [editMode, currentExpense, groups, formData.group_id]);
-  
+
   // Set default currency when currencies are loaded
   useEffect(() => {
     if (currenciesArray.length > 0 && !formData.currency_id && !editMode) {
@@ -223,18 +231,18 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
       setShowSplitOptions(false);
       return;
     }
-    
+
     setLoadingMembers(true);
     try {
       const members = await groupsAPI.getGroupMembers(groupId);
       setGroupMembers(members || []);
-      
+
       // Initialize shares with all members included
       if (members && members.length > 0) {
         const amount = parseFloat(formData.amount) || 0;
         const shareAmount = amount / members.length;
         const sharePercentage = 100 / members.length;
-        
+
         const newShares = members.map((member: GroupMember) => ({
           user_id: member.user.id,
           user_name: `${member.user.first_name} ${member.user.last_name}`.trim() || member.user.email,
@@ -243,14 +251,14 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
           percentage: sharePercentage,
           included: true,
         }));
-        
+
         setShares(newShares);
         setShowSplitOptions(true);
-        
+
         // Only set paidBy to current user if NOT preserving existing paidBy
         // (i.e., only on new expense creation or group change, not on edit mode initial load)
         if (!preservePaidBy) {
-          const currentUserMember = members.find((m: GroupMember) => 
+          const currentUserMember = members.find((m: GroupMember) =>
             String(m.user.id) === String(currentUser?.id)
           );
           if (currentUserMember) {
@@ -294,7 +302,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
       ...prev,
       [name]: value,
     }));
-    
+
     if (errors[name]) {
       setErrors((prev: any) => ({
         ...prev,
@@ -308,7 +316,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
       ...prev,
       [name]: value,
     }));
-    
+
     if (name === 'group_id') {
       if (value) {
         loadGroupMembers(value);
@@ -323,13 +331,13 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
   const recalculateShares = (splitType: string) => {
     const amount = parseFloat(formData.amount) || 0;
     const includedMembers = shares.filter(s => s.included);
-    
+
     if (includedMembers.length === 0) return;
-    
+
     if (splitType === 'equal') {
       const shareAmount = amount / includedMembers.length;
       const sharePercentage = 100 / includedMembers.length;
-      
+
       setShares(prev => prev.map(share => ({
         ...share,
         amount: share.included ? shareAmount : 0,
@@ -345,34 +353,34 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
 
   const handleMemberToggle = (userId: string) => {
     setShares(prev => {
-      const newShares = prev.map(share => 
-        share.user_id === userId 
+      const newShares = prev.map(share =>
+        share.user_id === userId
           ? { ...share, included: !share.included }
           : share
       );
-      
+
       // Recalculate after toggle
       const amount = parseFloat(formData.amount) || 0;
       const includedCount = newShares.filter(s => s.included).length;
-      
+
       if (includedCount > 0 && formData.split_type === 'equal') {
         const shareAmount = amount / includedCount;
         const sharePercentage = 100 / includedCount;
-        
+
         return newShares.map(share => ({
           ...share,
           amount: share.included ? shareAmount : 0,
           percentage: share.included ? sharePercentage : 0,
         }));
       }
-      
+
       return newShares;
     });
   };
 
   const handleShareChange = (userId: string, field: 'amount' | 'percentage', value: number) => {
     const totalAmount = parseFloat(formData.amount) || 0;
-    
+
     setShares(prev => prev.map(share => {
       if (share.user_id === userId) {
         if (field === 'amount') {
@@ -395,19 +403,19 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
 
   const validateForm = () => {
     const newErrors: any = {};
-    
+
     if (!formData.title?.trim() && !formData.description.trim()) {
       newErrors.title = 'Title is required';
     }
-    
+
     if (!formData.amount || parseFloat(formData.amount) <= 0) {
       newErrors.amount = 'Valid amount is required';
     }
-    
+
     if (!formData.currency_id) {
       newErrors.currency_id = 'Currency is required';
     }
-    
+
     // Validate date - must not be in the future
     if (!formData.date) {
       newErrors.date = 'Date is required';
@@ -418,49 +426,49 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
         newErrors.date = 'Date cannot be in the future';
       }
     }
-    
-    // Group is mandatory
-    if (!formData.group_id) {
+
+    // Group is mandatory ONLY for Group expenses
+    if (expenseMode === 'group' && !formData.group_id) {
       newErrors.group_id = 'Please select a group for this expense';
     }
-    
+
     // Validate shares if group expense
-    if (showSplitOptions && shares.length > 0) {
+    if (expenseMode === 'group' && showSplitOptions && shares.length > 0) {
       const includedShares = shares.filter(s => s.included);
       if (includedShares.length === 0) {
         newErrors.shares = 'At least one member must be included in the split';
       } else {
         const totalShared = includedShares.reduce((sum, share) => sum + share.amount, 0);
         const totalAmount = parseFloat(formData.amount);
-        
-        if (Math.abs(totalShared - totalAmount) > 0.01) {
+        // Allow slight float mismatch
+        if (Math.abs(totalShared - totalAmount) > 0.05) {
           newErrors.shares = `Split amounts must equal total ($${totalAmount.toFixed(2)})`;
         }
       }
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     setSuccessMessage(null);
     setErrorMessage(null);
-    
+
     if (!validateForm()) return;
-    
+
     const includedShares = shares.filter(s => s.included);
     const shares_data = showSplitOptions && includedShares.length > 0
       ? includedShares.map(share => ({
-          user_id: share.user_id,
-          amount: share.amount,
-        }))
+        user_id: share.user_id,
+        amount: share.amount,
+      }))
       : [];
-    
+
     const title = sanitizeInput((formData.title?.trim() || formData.description?.trim() || 'Untitled Expense').trim());
-    
+
     // Extract IDs - handle both string IDs and object formats
     const getCurrencyId = () => {
       const val = formData.currency_id;
@@ -470,7 +478,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
       }
       return val;
     };
-    
+
     const getGroupId = () => {
       const val = formData.group_id;
       if (!val) return null;
@@ -479,7 +487,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
       }
       return val;
     };
-    
+
     const getCategoryId = () => {
       const val = formData.category_id;
       if (!val) return null;
@@ -488,7 +496,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
       }
       return val;
     };
-    
+
     const expenseData: any = {
       title: title,
       description: sanitizeInput(formData.description?.trim() || formData.notes?.trim() || ''),
@@ -496,27 +504,38 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
       date: formData.date.toISOString().split('T')[0],
       currency: getCurrencyId(),
     };
-    
+
     if (formData.user_category_id) {
       expenseData.user_category_id = formData.user_category_id;
     } else {
       const categoryId = getCategoryId();
       if (categoryId) expenseData.category_id = categoryId;
     }
-    
-    const groupId = getGroupId();
-    if (groupId) {
-      expenseData.group = groupId;
+
+    // Handle Group & Shares based on Mode
+    if (expenseMode === 'group') {
+      const groupId = getGroupId();
+      if (groupId) {
+        expenseData.group = groupId; // or group_id, depending on what backend expects for write. Serailizer uses 'group_id' via map.
+        // Actually serializer expects 'group_id' or 'group' which it maps to 'group_id'. 
+        // Let's stick to what was working, but ensure it's set.
+        expenseData.group = groupId;
+      }
+
+      if (paidBy) {
+        expenseData.paid_by_id = paidBy;
+      }
+
+      if (shares_data.length > 0) {
+        expenseData.shares_data = shares_data;
+      }
+    } else {
+      // Personal Mode - Explicitly Nullify Group Context
+      expenseData.group = null;
+      expenseData.paid_by_id = currentUser?.id; // Personal is always paid by self
+      // No shares_data sent
     }
-    
-    if (paidBy) {
-      expenseData.paid_by_id = paidBy;
-    }
-    
-    if (shares_data.length > 0) {
-      expenseData.shares_data = shares_data;
-    }
-    
+
     let requestData: any;
     if (formData.receipt_image) {
       const formDataObj = new FormData();
@@ -532,7 +551,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
     } else {
       requestData = expenseData;
     }
-    
+
     try {
       if (editMode && id) {
         const result = await dispatch(updateExpense({ id, data: requestData }));
@@ -549,8 +568,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
         } else {
           const errorMsg = result.payload as any;
           setErrorMessage(
-            typeof errorMsg === 'string' 
-              ? errorMsg 
+            typeof errorMsg === 'string'
+              ? errorMsg
               : errorMsg?.detail || errorMsg?.message || 'Failed to update expense.'
           );
         }
@@ -569,8 +588,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
         } else {
           const errorMsg = result.payload as any;
           setErrorMessage(
-            typeof errorMsg === 'string' 
-              ? errorMsg 
+            typeof errorMsg === 'string'
+              ? errorMsg
               : errorMsg?.detail || errorMsg?.message || 'Failed to add expense.'
           );
         }
@@ -625,10 +644,10 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
               {errorMessage}
             </Alert>
           )}
-          
+
           <Grid container spacing={3}>
             {/* Main Form */}
-            <Grid item xs={12} md={showSplitOptions ? 7 : 12}>
+            <Grid item xs={12} md={expenseMode === 'group' ? 7 : 12}>
               <Card elevation={2}>
                 <CardContent sx={{ p: { xs: 2, md: 3 } }}>
                   <Typography variant="h5" fontWeight="600" gutterBottom>
@@ -637,7 +656,26 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
                   <Typography variant="body2" color="text.secondary" mb={3}>
                     Fill in the details below to {editMode ? 'update your' : 'record a new'} expense
                   </Typography>
-                  
+
+                  {/* Expense Mode Toggle */}
+                  <Box display="flex" justifyContent="center" mb={3}>
+                    <ToggleButtonGroup
+                      value={expenseMode}
+                      exclusive
+                      onChange={(e, newMode) => {
+                        if (newMode) setExpenseMode(newMode);
+                      }}
+                      color="primary"
+                    >
+                      <ToggleButton value="personal" sx={{ px: 4 }}>
+                        <Person sx={{ mr: 1 }} /> Personal
+                      </ToggleButton>
+                      <ToggleButton value="group" sx={{ px: 4 }}>
+                        <People sx={{ mr: 1 }} /> Group
+                      </ToggleButton>
+                    </ToggleButtonGroup>
+                  </Box>
+
                   <Grid container spacing={2.5}>
                     {/* Title */}
                     <Grid item xs={12}>
@@ -654,7 +692,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
                         variant="outlined"
                       />
                     </Grid>
-                    
+
                     {/* Amount & Currency */}
                     <Grid item xs={12} sm={7}>
                       <TextField
@@ -693,7 +731,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
                         </Select>
                       </FormControl>
                     </Grid>
-                    
+
                     {/* Date & Category */}
                     <Grid item xs={12} sm={6}>
                       <DatePicker
@@ -786,47 +824,67 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
                         </Select>
                       </FormControl>
                     </Grid>
-                    
-                    {/* Group Selection - Required */}
+
+
+
+                    {/* Group Selection - Required for Group Mode */}
+                    {expenseMode === 'group' && (
+                      <Grid item xs={12}>
+                        <FormControl fullWidth required error={!!errors.group_id}>
+                          <InputLabel id="group-select-label" shrink>Group *</InputLabel>
+                          <Select
+                            native
+                            labelId="group-select-label"
+                            id="group-select"
+                            value={formData.group_id}
+                            label="Group *"
+                            onChange={(e) => handleSelectChange('group_id', e.target.value)}
+                          >
+                            <option value="">-- Select Group --</option>
+                            {groups.map((group: any) => (
+                              <option key={group.id} value={group.id}>
+                                {group.name}
+                              </option>
+                            ))}
+                          </Select>
+                          {errors.group_id && (
+                            <Typography variant="caption" color="error" sx={{ mt: 0.5, display: 'block' }}>
+                              {errors.group_id}
+                            </Typography>
+                          )}
+                        </FormControl>
+                      </Grid>
+                    )}
+
+                    {/* Receipt Upload */}
                     <Grid item xs={12}>
-                      <FormControl fullWidth required error={!!errors.group_id}>
-                        <InputLabel id="group-select-label" shrink>Group *</InputLabel>
-                        <Select
-                          native
-                          labelId="group-select-label"
-                          id="group-select"
-                          value={formData.group_id}
-                          label="Group *"
-                          onChange={(e) => {
-                            const value = e.target.value as string;
-                            console.log('Group selected:', value);
-                            handleSelectChange('group_id', value);
-                          }}
-                          inputProps={{
-                            id: 'group-native-select',
-                          }}
-                        >
-                          <option value="">-- Select a Group --</option>
-                          {groups.map((group: any) => (
-                            <option key={`group-option-${group.id}`} value={String(group.id)}>
-                              {group.name}
-                              {group.member_count ? ` (${group.member_count} members)` : ''}
-                            </option>
-                          ))}
-                        </Select>
-                        {errors.group_id && (
-                          <Typography variant="caption" color="error" sx={{ mt: 0.5, display: 'block' }}>
-                            {errors.group_id}
-                          </Typography>
-                        )}
-                        {!errors.group_id && (
-                          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                            Select a group to split this expense with others
-                          </Typography>
-                        )}
-                      </FormControl>
+                      <Button
+                        component="label"
+                        variant="outlined"
+                        startIcon={<PhotoCamera />}
+                        fullWidth
+                        sx={{ borderStyle: 'dashed', textAlign: 'left', justifyContent: 'flex-start', color: 'text.secondary', borderColor: 'rgba(0, 0, 0, 0.23)' }}
+                      >
+                        {formData.receipt_image ? formData.receipt_image.name : 'Upload Receipt / Invoice'}
+                        <input
+                          type="file"
+                          hidden
+                          accept="image/*,application/pdf"
+                          onChange={handleFileUpload}
+                        />
+                      </Button>
+                      {formData.receipt_image && (
+                        <Chip
+                          sx={{ mt: 1 }}
+                          icon={<Receipt />}
+                          label={formData.receipt_image.name}
+                          onDelete={() => setFormData(prev => ({ ...prev, receipt_image: null }))}
+                          variant="outlined"
+                          size="small"
+                        />
+                      )}
                     </Grid>
-                    
+
                     {/* Description */}
                     <Grid item xs={12}>
                       <TextField
@@ -847,7 +905,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
                         }}
                       />
                     </Grid>
-                    
+
                     {/* Advanced Options Toggle */}
                     <Grid item xs={12}>
                       <Button
@@ -858,7 +916,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
                         {showAdvanced ? 'Hide' : 'Show'} Advanced Options
                       </Button>
                     </Grid>
-                    
+
                     <Grid item xs={12}>
                       <Collapse in={showAdvanced}>
                         <Grid container spacing={2}>
@@ -880,29 +938,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
                               )}
                             />
                           </Grid>
-                          
-                          {/* Receipt Upload */}
-                          <Grid item xs={12}>
-                            <Box display="flex" alignItems="center" gap={2}>
-                              <Button
-                                variant="outlined"
-                                component="label"
-                                startIcon={<PhotoCamera />}
-                              >
-                                Upload Receipt
-                                <input type="file" hidden accept="image/*" onChange={handleFileUpload} />
-                              </Button>
-                              {formData.receipt_image && (
-                                <Chip
-                                  icon={<Receipt />}
-                                  label={formData.receipt_image.name}
-                                  onDelete={() => setFormData(prev => ({ ...prev, receipt_image: null }))}
-                                  variant="outlined"
-                                />
-                              )}
-                            </Box>
-                          </Grid>
-                          
+
                           {/* Recurring */}
                           <Grid item xs={12}>
                             <FormControlLabel
@@ -921,11 +957,11 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
                   </Grid>
                 </CardContent>
               </Card>
-              
+
               {/* Action Buttons */}
-              <Paper 
+              <Paper
                 elevation={3}
-                sx={{ 
+                sx={{
                   mt: 3,
                   p: 2,
                   position: 'sticky',
@@ -958,215 +994,217 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
                 </Button>
               </Paper>
             </Grid>
-            
+
             {/* Split Options Panel */}
-            {showSplitOptions && (
-              <Grid item xs={12} md={5}>
-                <Card 
-                  elevation={2} 
-                  sx={{ 
-                    position: 'sticky', 
-                    top: 20,
-                    maxHeight: 'calc(100vh - 100px)',
-                    overflow: 'auto',
-                  }}
-                >
-                  <CardContent sx={{ p: { xs: 2, md: 3 } }}>
-                    <Typography variant="h6" fontWeight="600" gutterBottom>
-                      Split Details
-                    </Typography>
-                    
-                    {loadingMembers ? (
-                      <Box display="flex" justifyContent="center" py={4}>
-                        <CircularProgress />
-                      </Box>
-                    ) : groupMembers.length > 0 ? (
-                      <>
-                        {/* Paid By Selection */}
-                        <Box mb={3}>
-                          <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                            Paid By
-                          </Typography>
-                          <FormControl fullWidth size="small">
-                            <Select
-                              value={paidBy}
-                              onChange={(e) => setPaidBy(e.target.value)}
-                              displayEmpty
-                            >
-                              {groupMembers.map((member) => (
-                                <MenuItem key={member.user.id} value={member.user.id}>
-                                  <Box display="flex" alignItems="center" gap={1}>
-                                    <Avatar sx={{ width: 28, height: 28, fontSize: '0.75rem' }}>
-                                      {getInitials(member.user.first_name, member.user.last_name, member.user.email)}
-                                    </Avatar>
-                                    <Box>
-                                      <Typography variant="body2">
-                                        {`${member.user.first_name} ${member.user.last_name}`.trim() || member.user.email}
-                                      </Typography>
-                                      {String(member.user.id) === String(currentUser?.id) && (
-                                        <Chip label="You" size="small" sx={{ ml: 1, height: 18, fontSize: '0.65rem' }} />
-                                      )}
-                                    </Box>
-                                  </Box>
-                                </MenuItem>
-                              ))}
-                            </Select>
-                          </FormControl>
+            {
+              expenseMode === 'group' && showSplitOptions && (
+                <Grid item xs={12} md={5}>
+                  <Card
+                    elevation={2}
+                    sx={{
+                      position: 'sticky',
+                      top: 20,
+                      maxHeight: 'calc(100vh - 100px)',
+                      overflow: 'auto',
+                    }}
+                  >
+                    <CardContent sx={{ p: { xs: 2, md: 3 } }}>
+                      <Typography variant="h6" fontWeight="600" gutterBottom>
+                        Split Details
+                      </Typography>
+
+                      {loadingMembers ? (
+                        <Box display="flex" justifyContent="center" py={4}>
+                          <CircularProgress />
                         </Box>
-                        
-                        <Divider sx={{ my: 2 }} />
-                        
-                        {/* Split Type Selection */}
-                        <Box mb={2}>
-                          <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                            Split Type
-                          </Typography>
-                          <FormControl component="fieldset">
-                            <RadioGroup
-                              row
-                              value={formData.split_type}
-                              onChange={(e) => handleSplitTypeChange(e.target.value)}
-                            >
-                              <FormControlLabel value="equal" control={<Radio size="small" />} label="Equal" />
-                              <FormControlLabel value="amount" control={<Radio size="small" />} label="By Amount" />
-                              <FormControlLabel value="percentage" control={<Radio size="small" />} label="By %" />
-                            </RadioGroup>
-                          </FormControl>
-                        </Box>
-                        
-                        {/* Members List */}
-                        <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                          Split Among ({includedCount} of {groupMembers.length} members)
-                        </Typography>
-                        
-                        {errors.shares && (
-                          <Alert severity="error" sx={{ mb: 2 }} icon={<Info />}>
-                            {errors.shares}
-                          </Alert>
-                        )}
-                        
-                        <List disablePadding>
-                          {shares.map((share, index) => {
-                            const member = groupMembers.find(m => m.user.id === share.user_id);
-                            if (!member) return null;
-                            
-                            const isCurrentUser = String(member.user.id) === String(currentUser?.id);
-                            
-                            return (
-                              <React.Fragment key={share.user_id}>
-                                <ListItem 
-                                  sx={{ 
-                                    px: 0,
-                                    py: 1.5,
-                                    opacity: share.included ? 1 : 0.5,
-                                    bgcolor: isCurrentUser ? 'action.selected' : 'transparent',
-                                    borderRadius: 1,
-                                  }}
-                                >
-                                  <Checkbox
-                                    checked={share.included}
-                                    onChange={() => handleMemberToggle(share.user_id)}
-                                    size="small"
-                                  />
-                                  <ListItemAvatar>
-                                    <Avatar sx={{ width: 36, height: 36, fontSize: '0.875rem' }}>
-                                      {getInitials(member.user.first_name, member.user.last_name, member.user.email)}
-                                    </Avatar>
-                                  </ListItemAvatar>
-                                  <ListItemText
-                                    primary={
-                                      <Box display="flex" alignItems="center" gap={0.5}>
-                                        <Typography variant="body2" fontWeight={500}>
-                                          {share.user_name}
+                      ) : groupMembers.length > 0 ? (
+                        <>
+                          {/* Paid By Selection */}
+                          <Box mb={3}>
+                            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                              Paid By
+                            </Typography>
+                            <FormControl fullWidth size="small">
+                              <Select
+                                value={paidBy}
+                                onChange={(e) => setPaidBy(e.target.value)}
+                                displayEmpty
+                              >
+                                {groupMembers.map((member) => (
+                                  <MenuItem key={member.user.id} value={member.user.id}>
+                                    <Box display="flex" alignItems="center" gap={1}>
+                                      <Avatar sx={{ width: 28, height: 28, fontSize: '0.75rem' }}>
+                                        {getInitials(member.user.first_name, member.user.last_name, member.user.email)}
+                                      </Avatar>
+                                      <Box>
+                                        <Typography variant="body2">
+                                          {`${member.user.first_name} ${member.user.last_name}`.trim() || member.user.email}
                                         </Typography>
-                                        {isCurrentUser && (
-                                          <Chip label="You" size="small" sx={{ height: 18, fontSize: '0.65rem' }} />
+                                        {String(member.user.id) === String(currentUser?.id) && (
+                                          <Chip label="You" size="small" sx={{ ml: 1, height: 18, fontSize: '0.65rem' }} />
                                         )}
                                       </Box>
-                                    }
-                                    secondary={
-                                      share.included && formData.split_type === 'equal' ? (
-                                        <Typography variant="body2" color="primary" fontWeight={500}>
-                                          {getCurrencySymbol()}{share.amount.toFixed(2)}
-                                        </Typography>
-                                      ) : null
-                                    }
-                                  />
-                                  {share.included && formData.split_type !== 'equal' && (
-                                    <ListItemSecondaryAction>
-                                      <TextField
-                                        size="small"
-                                        type="number"
-                                        value={formData.split_type === 'percentage' ? share.percentage.toFixed(1) : share.amount.toFixed(2)}
-                                        onChange={(e) => handleShareChange(
-                                          share.user_id,
-                                          formData.split_type === 'percentage' ? 'percentage' : 'amount',
-                                          parseFloat(e.target.value) || 0
-                                        )}
-                                        InputProps={{
-                                          startAdornment: formData.split_type === 'amount' ? (
-                                            <InputAdornment position="start">{getCurrencySymbol()}</InputAdornment>
-                                          ) : null,
-                                          endAdornment: formData.split_type === 'percentage' ? (
-                                            <InputAdornment position="end">%</InputAdornment>
-                                          ) : null,
-                                        }}
-                                        sx={{ width: 100 }}
-                                        inputProps={{ step: '0.01', min: '0' }}
-                                      />
-                                    </ListItemSecondaryAction>
-                                  )}
-                                </ListItem>
-                                {index < shares.length - 1 && <Divider />}
-                              </React.Fragment>
-                            );
-                          })}
-                        </List>
-                        
-                        {/* Summary */}
-                        {formData.amount && (
-                          <Paper variant="outlined" sx={{ mt: 2, p: 2, bgcolor: 'grey.50' }}>
-                            <Box display="flex" justifyContent="space-between" mb={1}>
-                              <Typography variant="body2" color="text.secondary">Total Amount</Typography>
-                              <Typography variant="body2" fontWeight={600}>
-                                {getCurrencySymbol()}{totalAmount.toFixed(2)}
-                              </Typography>
-                            </Box>
-                            <Box display="flex" justifyContent="space-between" mb={1}>
-                              <Typography variant="body2" color="text.secondary">Split Total</Typography>
-                              <Typography variant="body2" fontWeight={600}>
-                                {getCurrencySymbol()}{totalShared.toFixed(2)}
-                              </Typography>
-                            </Box>
-                            {Math.abs(remainingAmount) > 0.01 && (
-                              <Box display="flex" justifyContent="space-between">
-                                <Typography variant="body2" color="error">Remaining</Typography>
-                                <Typography variant="body2" color="error" fontWeight={600}>
-                                  {getCurrencySymbol()}{remainingAmount.toFixed(2)}
+                                    </Box>
+                                  </MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                          </Box>
+
+                          <Divider sx={{ my: 2 }} />
+
+                          {/* Split Type Selection */}
+                          <Box mb={2}>
+                            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                              Split Type
+                            </Typography>
+                            <FormControl component="fieldset">
+                              <RadioGroup
+                                row
+                                value={formData.split_type}
+                                onChange={(e) => handleSplitTypeChange(e.target.value)}
+                              >
+                                <FormControlLabel value="equal" control={<Radio size="small" />} label="Equal" />
+                                <FormControlLabel value="amount" control={<Radio size="small" />} label="By Amount" />
+                                <FormControlLabel value="percentage" control={<Radio size="small" />} label="By %" />
+                              </RadioGroup>
+                            </FormControl>
+                          </Box>
+
+                          {/* Members List */}
+                          <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                            Split Among ({includedCount} of {groupMembers.length} members)
+                          </Typography>
+
+                          {errors.shares && (
+                            <Alert severity="error" sx={{ mb: 2 }} icon={<Info />}>
+                              {errors.shares}
+                            </Alert>
+                          )}
+
+                          <List disablePadding>
+                            {shares.map((share, index) => {
+                              const member = groupMembers.find(m => m.user.id === share.user_id);
+                              if (!member) return null;
+
+                              const isCurrentUser = String(member.user.id) === String(currentUser?.id);
+
+                              return (
+                                <React.Fragment key={share.user_id}>
+                                  <ListItem
+                                    sx={{
+                                      px: 0,
+                                      py: 1.5,
+                                      opacity: share.included ? 1 : 0.5,
+                                      bgcolor: isCurrentUser ? 'action.selected' : 'transparent',
+                                      borderRadius: 1,
+                                    }}
+                                  >
+                                    <Checkbox
+                                      checked={share.included}
+                                      onChange={() => handleMemberToggle(share.user_id)}
+                                      size="small"
+                                    />
+                                    <ListItemAvatar>
+                                      <Avatar sx={{ width: 36, height: 36, fontSize: '0.875rem' }}>
+                                        {getInitials(member.user.first_name, member.user.last_name, member.user.email)}
+                                      </Avatar>
+                                    </ListItemAvatar>
+                                    <ListItemText
+                                      primary={
+                                        <Box display="flex" alignItems="center" gap={0.5}>
+                                          <Typography variant="body2" fontWeight={500}>
+                                            {share.user_name}
+                                          </Typography>
+                                          {isCurrentUser && (
+                                            <Chip label="You" size="small" sx={{ height: 18, fontSize: '0.65rem' }} />
+                                          )}
+                                        </Box>
+                                      }
+                                      secondary={
+                                        share.included && formData.split_type === 'equal' ? (
+                                          <Typography variant="body2" color="primary" fontWeight={500}>
+                                            {getCurrencySymbol()}{share.amount.toFixed(2)}
+                                          </Typography>
+                                        ) : null
+                                      }
+                                    />
+                                    {share.included && formData.split_type !== 'equal' && (
+                                      <ListItemSecondaryAction>
+                                        <TextField
+                                          size="small"
+                                          type="number"
+                                          value={formData.split_type === 'percentage' ? share.percentage.toFixed(1) : share.amount.toFixed(2)}
+                                          onChange={(e) => handleShareChange(
+                                            share.user_id,
+                                            formData.split_type === 'percentage' ? 'percentage' : 'amount',
+                                            parseFloat(e.target.value) || 0
+                                          )}
+                                          InputProps={{
+                                            startAdornment: formData.split_type === 'amount' ? (
+                                              <InputAdornment position="start">{getCurrencySymbol()}</InputAdornment>
+                                            ) : null,
+                                            endAdornment: formData.split_type === 'percentage' ? (
+                                              <InputAdornment position="end">%</InputAdornment>
+                                            ) : null,
+                                          }}
+                                          sx={{ width: 100 }}
+                                          inputProps={{ step: '0.01', min: '0' }}
+                                        />
+                                      </ListItemSecondaryAction>
+                                    )}
+                                  </ListItem>
+                                  {index < shares.length - 1 && <Divider />}
+                                </React.Fragment>
+                              );
+                            })}
+                          </List>
+
+                          {/* Summary */}
+                          {formData.amount && (
+                            <Paper variant="outlined" sx={{ mt: 2, p: 2, bgcolor: 'grey.50' }}>
+                              <Box display="flex" justifyContent="space-between" mb={1}>
+                                <Typography variant="body2" color="text.secondary">Total Amount</Typography>
+                                <Typography variant="body2" fontWeight={600}>
+                                  {getCurrencySymbol()}{totalAmount.toFixed(2)}
                                 </Typography>
                               </Box>
-                            )}
-                            {Math.abs(remainingAmount) <= 0.01 && (
-                              <Alert severity="success" sx={{ mt: 1 }} icon={<CheckCircle />}>
-                                Split amounts match total
-                              </Alert>
-                            )}
-                          </Paper>
-                        )}
-                      </>
-                    ) : (
-                      <Alert severity="info">
-                        No members found in this group. Add members to the group first.
-                      </Alert>
-                    )}
-                  </CardContent>
-                </Card>
-              </Grid>
-            )}
-          </Grid>
-        </form>
-      </Box>
-    </LocalizationProvider>
+                              <Box display="flex" justifyContent="space-between" mb={1}>
+                                <Typography variant="body2" color="text.secondary">Split Total</Typography>
+                                <Typography variant="body2" fontWeight={600}>
+                                  {getCurrencySymbol()}{totalShared.toFixed(2)}
+                                </Typography>
+                              </Box>
+                              {Math.abs(remainingAmount) > 0.01 && (
+                                <Box display="flex" justifyContent="space-between">
+                                  <Typography variant="body2" color="error">Remaining</Typography>
+                                  <Typography variant="body2" color="error" fontWeight={600}>
+                                    {getCurrencySymbol()}{remainingAmount.toFixed(2)}
+                                  </Typography>
+                                </Box>
+                              )}
+                              {Math.abs(remainingAmount) <= 0.01 && (
+                                <Alert severity="success" sx={{ mt: 1 }} icon={<CheckCircle />}>
+                                  Split amounts match total
+                                </Alert>
+                              )}
+                            </Paper>
+                          )}
+                        </>
+                      ) : (
+                        <Alert severity="info">
+                          No members found in this group. Add members to the group first.
+                        </Alert>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Grid>
+              )
+            }
+          </Grid >
+        </form >
+      </Box >
+    </LocalizationProvider >
   );
 };
 
