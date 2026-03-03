@@ -45,6 +45,9 @@ import {
   AvatarGroup,
   ToggleButton,
   ToggleButtonGroup,
+  useTheme,
+  useMediaQuery,
+  Stack,
 } from '@mui/material';
 import {
   Payment,
@@ -172,6 +175,8 @@ interface SimplifiedTransaction {
 }
 
 const Settlements: React.FC = () => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [tabValue, setTabValue] = useState(0);
   const [settleDialog, setSettleDialog] = useState(false);
   const [reminderDialog, setReminderDialog] = useState(false);
@@ -484,17 +489,17 @@ const Settlements: React.FC = () => {
     isCurrency?: boolean;
   }) => (
     <Card sx={{ height: '100%', position: 'relative', overflow: 'visible' }}>
-      <CardContent>
+      <CardContent sx={{ p: { xs: 1.5, sm: 2 }, '&:last-child': { pb: { xs: 1.5, sm: 2 } } }}>
         <Box display="flex" alignItems="flex-start" justifyContent="space-between">
-          <Box>
-            <Typography color="text.secondary" variant="body2" gutterBottom>
+          <Box minWidth={0}>
+            <Typography color="text.secondary" variant="body2" gutterBottom noWrap sx={{ fontSize: { xs: '0.7rem', sm: '0.875rem' } }}>
               {title}
             </Typography>
-            <Typography variant="h4" sx={{ color, fontWeight: 600 }}>
+            <Typography sx={{ color, fontWeight: 600, fontSize: { xs: '1.1rem', sm: '1.3rem', md: '2.125rem' } }} noWrap>
               {typeof value === 'number' ? (isCurrency ? formatAmount(value) : value) : value}
             </Typography>
             {subtitle && (
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" color="text.secondary" noWrap sx={{ display: { xs: 'none', sm: 'block' } }}>
                 {subtitle}
               </Typography>
             )}
@@ -503,8 +508,10 @@ const Settlements: React.FC = () => {
             sx={{
               bgcolor: `${color}15`,
               color: color,
-              width: 48,
-              height: 48,
+              width: { xs: 36, sm: 48 },
+              height: { xs: 36, sm: 48 },
+              flexShrink: 0,
+              ml: 1,
             }}
           >
             {icon}
@@ -516,7 +523,7 @@ const Settlements: React.FC = () => {
               position: 'absolute',
               bottom: 8,
               right: 8,
-              display: 'flex',
+              display: { xs: 'none', sm: 'flex' },
               alignItems: 'center',
               gap: 0.5,
             }}
@@ -555,12 +562,12 @@ const Settlements: React.FC = () => {
       </Snackbar>
 
       {/* Header */}
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={{ xs: 2, md: 3 }} flexWrap="wrap" gap={1}>
         <Box>
-          <Typography variant="h4" fontWeight="bold">
+          <Typography variant="h4" fontWeight="bold" sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2.125rem' } }}>
             Settlements
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' } }}>
             Manage your balances and settle expenses with friends
           </Typography>
         </Box>
@@ -577,8 +584,8 @@ const Settlements: React.FC = () => {
       {loading && <LinearProgress sx={{ mb: 2 }} />}
 
       {/* Summary Cards */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid item xs={12} sm={6} md={3}>
+      <Grid container spacing={{ xs: 1.5, sm: 2, md: 3 }} sx={{ mb: { xs: 2, md: 3 } }}>
+        <Grid item xs={6} sm={6} md={3}>
           <StatCard
             title="You Owe"
             value={totalOwed}
@@ -588,7 +595,7 @@ const Settlements: React.FC = () => {
             trend="down"
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={6} sm={6} md={3}>
           <StatCard
             title="Owed to You"
             value={totalOwedToYou}
@@ -598,7 +605,7 @@ const Settlements: React.FC = () => {
             trend="up"
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={6} sm={6} md={3}>
           <StatCard
             title="Net Balance"
             value={netBalance}
@@ -607,7 +614,7 @@ const Settlements: React.FC = () => {
             color={netBalance >= 0 ? '#4caf50' : '#f44336'}
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={6} sm={6} md={3}>
           <StatCard
             title="Pending"
             value={settlementCounts.pending}
@@ -620,11 +627,12 @@ const Settlements: React.FC = () => {
       </Grid>
 
       {/* Tabs */}
-      <Paper sx={{ mb: 3 }}>
+      <Paper sx={{ mb: { xs: 2, md: 3 } }}>
         <Tabs
           value={tabValue}
           onChange={handleTabChange}
           aria-label="settlements tabs"
+          variant={isMobile ? 'fullWidth' : 'standard'}
           sx={{ borderBottom: 1, borderColor: 'divider' }}
         >
           <Tab 
@@ -770,7 +778,7 @@ const Settlements: React.FC = () => {
                               </Typography>
                             }
                           />
-                          <Box display="flex" gap={1}>
+                          <Box display="flex" gap={1} sx={{ flexShrink: 0, ml: 1 }}>
                             <Button
                               variant="contained"
                               size="small"
@@ -835,7 +843,7 @@ const Settlements: React.FC = () => {
                               </Typography>
                             }
                           />
-                          <Box display="flex" gap={1}>
+                          <Box display="flex" gap={0.5} alignItems="center" sx={{ flexShrink: 0, ml: 1 }}>
                             <Tooltip title="Send Reminder">
                               <IconButton
                                 color="warning"
@@ -848,10 +856,11 @@ const Settlements: React.FC = () => {
                               variant="outlined"
                               size="small"
                               color="success"
-                              startIcon={<Check />}
+                              startIcon={isMobile ? undefined : <Check />}
                               onClick={() => handleOpenSettle(balance)}
+                              sx={{ whiteSpace: 'nowrap', px: { xs: 1, sm: 2 } }}
                             >
-                              Record Payment
+                              {isMobile ? 'Record' : 'Record Payment'}
                             </Button>
                           </Box>
                         </ListItem>
@@ -867,14 +876,14 @@ const Settlements: React.FC = () => {
 
       {/* Settlements Tab */}
       <TabPanel value={tabValue} index={1}>
-        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-          <Typography variant="h6">
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2} flexWrap="wrap" gap={1}>
+          <Typography variant="h6" sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>
             Expense Settlements
-            <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>
+            <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1, display: { xs: 'none', sm: 'inline' } }}>
               ({settlementCounts.pending} pending, {settlementCounts.completed} completed)
             </Typography>
           </Typography>
-          <FormControl size="small" sx={{ minWidth: 150 }}>
+          <FormControl size="small" sx={{ minWidth: { xs: 120, sm: 150 } }}>
             <InputLabel>Filter Status</InputLabel>
             <Select
               value={filter}
@@ -965,11 +974,11 @@ const Settlements: React.FC = () => {
                           </Box>
                         </Box>
                         
-                        <Box display="flex" alignItems="center" gap={2}>
+                        <Box display="flex" alignItems="center" gap={{ xs: 1, sm: 2 }} flexWrap="wrap" justifyContent="flex-end" sx={{ flexShrink: 0 }}>
                           <Typography 
-                            variant="h5" 
                             fontWeight="bold"
                             color={isOwed ? 'success.main' : 'error.main'}
+                            sx={{ fontSize: { xs: '1rem', sm: '1.5rem' } }}
                           >
                             {isOwed ? '+' : '-'}{formatAmount(expSettlement.amount)}
                           </Typography>
@@ -981,15 +990,16 @@ const Settlements: React.FC = () => {
                           />
                           
                           {expSettlement.status === 'pending' && (
-                            <Box display="flex" gap={1}>
+                            <Box display="flex" gap={0.5}>
                               <Button
                                 variant="contained"
                                 size="small"
                                 color={isOwed ? 'success' : 'primary'}
-                                startIcon={<Check />}
+                                startIcon={isMobile ? undefined : <Check />}
                                 onClick={() => handleOpenExpenseSettlementSettle(expSettlement)}
+                                sx={{ whiteSpace: 'nowrap', fontSize: { xs: '0.7rem', sm: '0.8125rem' } }}
                               >
-                                {isOwed ? 'Mark Received' : 'Mark Paid'}
+                                {isOwed ? (isMobile ? 'Received' : 'Mark Received') : (isMobile ? 'Paid' : 'Mark Paid')}
                               </Button>
                               {isOwed && (
                                 <Tooltip title="Send Reminder">
@@ -1033,8 +1043,8 @@ const Settlements: React.FC = () => {
 
       {/* History Tab */}
       <TabPanel value={tabValue} index={2}>
-        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-          <Typography variant="h6">Transaction History</Typography>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2} flexWrap="wrap" gap={1}>
+          <Typography variant="h6" sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>Transaction History</Typography>
           <ToggleButtonGroup
             value={historyFilter}
             exclusive
@@ -1069,12 +1079,80 @@ const Settlements: React.FC = () => {
                       No transactions found
                     </Typography>
                   </Box>
+                ) : isMobile ? (
+                  /* Card-based layout for mobile */
+                  <>
+                    <Stack spacing={1.5}>
+                      {transactions
+                        .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                        .map((txn) => (
+                          <Card key={txn.id} variant="outlined" sx={{ borderRadius: 2 }}>
+                            <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                              <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={0.75}>
+                                <Box flex={1} minWidth={0}>
+                                  <Typography variant="body2" fontWeight={600} noWrap>
+                                    {txn.expense_title}
+                                  </Typography>
+                                  <Box display="flex" alignItems="center" gap={0.5} mt={0.25}>
+                                    <Avatar sx={{ width: 20, height: 20, fontSize: '0.65rem' }}>
+                                      {getInitials(txn.other_user.name)}
+                                    </Avatar>
+                                    <Typography variant="caption" color="text.secondary">
+                                      {txn.other_user.name}
+                                    </Typography>
+                                  </Box>
+                                </Box>
+                                <Typography
+                                  variant="body1"
+                                  fontWeight={600}
+                                  color={txn.type === 'you_owe' ? 'error' : 'success.main'}
+                                  sx={{ flexShrink: 0, ml: 1 }}
+                                >
+                                  {txn.type === 'you_owe' ? '-' : '+'}{formatAmount(txn.amount)}
+                                </Typography>
+                              </Box>
+                              <Box display="flex" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={0.5}>
+                                <Box display="flex" alignItems="center" gap={0.5}>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {txn.expense_date ? format(new Date(txn.expense_date), 'MMM d, yyyy') : '-'}
+                                  </Typography>
+                                  {txn.group_name && (
+                                    <Chip label={txn.group_name} size="small" variant="outlined" sx={{ height: 20, fontSize: '0.65rem' }} />
+                                  )}
+                                </Box>
+                                <Chip
+                                  icon={txn.is_settled ? <CheckCircle /> : <Schedule />}
+                                  label={txn.is_settled ? 'Settled' : 'Pending'}
+                                  color={txn.is_settled ? 'success' : 'warning'}
+                                  size="small"
+                                  sx={{ height: 24 }}
+                                />
+                              </Box>
+                            </CardContent>
+                          </Card>
+                        ))}
+                    </Stack>
+                    <TablePagination
+                      component="div"
+                      count={transactions.length}
+                      page={page}
+                      onPageChange={(_, newPage) => setPage(newPage)}
+                      rowsPerPage={rowsPerPage}
+                      onRowsPerPageChange={(e) => {
+                        setRowsPerPage(parseInt(e.target.value, 10));
+                        setPage(0);
+                      }}
+                      rowsPerPageOptions={[5, 10, 25]}
+                      sx={{ '.MuiTablePagination-toolbar': { flexWrap: 'wrap', justifyContent: 'center' } }}
+                    />
+                  </>
                 ) : (
-                  <TableContainer>
-                    <Table size="small">
+                  /* Desktop table with horizontal scroll */
+                  <TableContainer sx={{ overflowX: 'auto' }}>
+                    <Table size="small" sx={{ minWidth: 650 }}>
                       <TableHead>
                         <TableRow>
-                          <TableCell>Date</TableCell>
+                          <TableCell sx={{ position: 'sticky', left: 0, bgcolor: 'background.paper', zIndex: 1 }}>Date</TableCell>
                           <TableCell>Expense</TableCell>
                           <TableCell>With</TableCell>
                           <TableCell>Group</TableCell>
@@ -1087,7 +1165,7 @@ const Settlements: React.FC = () => {
                           .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                           .map((txn) => (
                             <TableRow key={txn.id} hover>
-                              <TableCell>
+                              <TableCell sx={{ position: 'sticky', left: 0, bgcolor: 'background.paper', zIndex: 1 }}>
                                 <Typography variant="body2">
                                   {txn.expense_date
                                     ? format(new Date(txn.expense_date), 'MMM d, yyyy')

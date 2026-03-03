@@ -1,78 +1,78 @@
 /**
  * Secure Token Storage Utilities
- * Provides secure storage for authentication tokens
+ *
+ * All token reads and writes go through localStorage for persistence
+ * across tabs and browser restarts. Previous versions used sessionStorage
+ * which caused unexpected logouts when opening a new tab.
  */
 
-/**
- * Token storage using sessionStorage (more secure than localStorage)
- * sessionStorage is cleared when the browser tab is closed
- */
+const STORAGE_KEY_ACCESS = 'access_token';
+const STORAGE_KEY_REFRESH = 'refresh_token';
+
+function migrateFromSessionStorage(): void {
+  try {
+    const accessInSession = sessionStorage.getItem(STORAGE_KEY_ACCESS);
+    const refreshInSession = sessionStorage.getItem(STORAGE_KEY_REFRESH);
+    if (accessInSession && !localStorage.getItem(STORAGE_KEY_ACCESS)) {
+      localStorage.setItem(STORAGE_KEY_ACCESS, accessInSession);
+    }
+    if (refreshInSession && !localStorage.getItem(STORAGE_KEY_REFRESH)) {
+      localStorage.setItem(STORAGE_KEY_REFRESH, refreshInSession);
+    }
+    sessionStorage.removeItem(STORAGE_KEY_ACCESS);
+    sessionStorage.removeItem(STORAGE_KEY_REFRESH);
+  } catch {
+    // Silently ignore — storage may be unavailable in certain contexts
+  }
+}
+
+migrateFromSessionStorage();
+
 export const tokenStorage = {
-  /**
-   * Get access token from storage
-   */
   getAccessToken: (): string | null => {
     try {
-      return sessionStorage.getItem('access_token');
-    } catch (error) {
-      console.error('Error reading access token:', error);
+      return localStorage.getItem(STORAGE_KEY_ACCESS);
+    } catch {
       return null;
     }
   },
-  
-  /**
-   * Set access token in storage
-   */
+
   setAccessToken: (token: string): void => {
     try {
-      sessionStorage.setItem('access_token', token);
-    } catch (error) {
-      console.error('Error storing access token:', error);
+      localStorage.setItem(STORAGE_KEY_ACCESS, token);
+    } catch {
+      // Storage full or unavailable
     }
   },
-  
-  /**
-   * Get refresh token from storage
-   */
+
   getRefreshToken: (): string | null => {
     try {
-      return sessionStorage.getItem('refresh_token');
-    } catch (error) {
-      console.error('Error reading refresh token:', error);
+      return localStorage.getItem(STORAGE_KEY_REFRESH);
+    } catch {
       return null;
     }
   },
-  
-  /**
-   * Set refresh token in storage
-   */
+
   setRefreshToken: (token: string): void => {
     try {
-      sessionStorage.setItem('refresh_token', token);
-    } catch (error) {
-      console.error('Error storing refresh token:', error);
+      localStorage.setItem(STORAGE_KEY_REFRESH, token);
+    } catch {
+      // Storage full or unavailable
     }
   },
-  
-  /**
-   * Clear all tokens from storage
-   */
+
   clearTokens: (): void => {
     try {
-      sessionStorage.removeItem('access_token');
-      sessionStorage.removeItem('refresh_token');
-      // Also clear localStorage for backward compatibility
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
-    } catch (error) {
-      console.error('Error clearing tokens:', error);
+      localStorage.removeItem(STORAGE_KEY_ACCESS);
+      localStorage.removeItem(STORAGE_KEY_REFRESH);
+      sessionStorage.removeItem(STORAGE_KEY_ACCESS);
+      sessionStorage.removeItem(STORAGE_KEY_REFRESH);
+    } catch {
+      // Ignore
     }
   },
-  
-  /**
-   * Check if user has valid tokens
-   */
+
   hasTokens: (): boolean => {
     return !!(tokenStorage.getAccessToken() && tokenStorage.getRefreshToken());
-  }
+  },
 };

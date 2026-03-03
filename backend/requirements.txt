@@ -10,6 +10,7 @@ cryptography==41.0.7
 
 # Database
 psycopg2-binary==2.9.9
+dj-database-url==2.3.0
 django-extensions==3.2.3
 
 # File handling and media

@@ -5,12 +5,12 @@ from rest_framework.permissions import IsAuthenticated
 from django.db.models import Q, Sum, Count, Avg
 from django.utils import timezone
 from datetime import datetime, timedelta
-from decimal import Decimal
+from decimal import Decimal, ROUND_DOWN
 import logging
 
 from .models import Expense, ExpenseShare, RecurringExpense, ExpenseComment
 from .serializers import (
-    ExpenseSerializer, ExpenseShareSerializer,
+    ExpenseSerializer, SimpleExpenseSerializer, ExpenseShareSerializer,
     RecurringExpenseSerializer, ExpenseCommentSerializer
 )
 from .mixins import ExpenseFilterMixin
@@ -20,13 +20,54 @@ from apps.groups.models import Group, GroupMembership
 logger = logging.getLogger(__name__)
 
 
+def _validate_split_user_ids(expense, user_ids):
+    """Return the set of valid active-member user IDs, or an error Response.
+
+    For group expenses every supplied user_id must belong to an active member
+    of the group.  For individual expenses the only valid user is the payer.
+    Returns (valid_ids: set | None, error_response: Response | None).
+    """
+    if expense.group:
+        active_member_ids = set(
+            expense.group.memberships
+            .filter(is_active=True)
+            .values_list('user_id', flat=True)
+        )
+        # Normalise to comparable types (both as strings)
+        submitted = {str(uid) for uid in user_ids}
+        valid = {str(uid) for uid in active_member_ids}
+        invalid = submitted - valid
+        if invalid:
+            return None, Response(
+                {'error': f'The following user IDs are not active members of the group: {sorted(invalid)}'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return active_member_ids, None
+
+    # Individual expense — only the payer
+    allowed = {str(expense.paid_by_id)}
+    submitted = {str(uid) for uid in user_ids}
+    invalid = submitted - allowed
+    if invalid:
+        return None, Response(
+            {'error': 'Non-group expenses can only have shares for the payer'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    return {expense.paid_by_id}, None
+
+
 class ExpenseViewSet(ExpenseFilterMixin, viewsets.ModelViewSet):
     """
     ViewSet for managing expenses.
     """
     serializer_class = ExpenseSerializer
     permission_classes = [IsAuthenticated]
-    
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return SimpleExpenseSerializer
+        return ExpenseSerializer
+
     def get_queryset(self):
         """Get queryset with security-validated filters"""
         queryset = self.get_base_expense_queryset(self.request.user)
@@ -95,127 +136,150 @@ class ExpenseViewSet(ExpenseFilterMixin, viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def split_equally(self, request, pk=None):
-        """Split expense equally among selected users"""
+        """Split expense equally among selected users."""
         expense = self.get_object()
         user_ids = request.data.get('user_ids', [])
-        
+
         if not user_ids:
             return Response(
                 {'error': 'No users provided'},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        
-        # Delete existing shares
+
+        # --- IDOR prevention: every user_id must be an active group member ---
+        _, err = _validate_split_user_ids(expense, user_ids)
+        if err:
+            return err
+
+        count = len(user_ids)
+        base_amount = (expense.amount / count).quantize(Decimal('0.01'), rounding=ROUND_DOWN)
+        remainder = expense.amount - (base_amount * count)
+
         expense.shares.all().delete()
-        
-        # Create new equal shares
-        share_amount = expense.amount / len(user_ids)
-        for user_id in user_ids:
+
+        for idx, user_id in enumerate(user_ids):
+            share_amount = base_amount + (remainder if idx == 0 else Decimal('0'))
             ExpenseShare.objects.create(
                 expense=expense,
                 user_id=user_id,
                 amount=share_amount,
                 currency=expense.currency,
-                paid_by=expense.paid_by
+                paid_by=expense.paid_by,
             )
-        
+
         return Response({
             'message': 'Expense split equally',
-            'shares': ExpenseShareSerializer(expense.shares.all(), many=True).data
+            'shares': ExpenseShareSerializer(expense.shares.all(), many=True).data,
         })
     
     @action(detail=True, methods=['post'])
     def split_by_amount(self, request, pk=None):
-        """Split expense by specific amounts"""
+        """Split expense by specific amounts."""
         expense = self.get_object()
-        
-        # Authorization check
+
+        # Authorization: only the payer or a group member can modify splits
         if expense.paid_by != request.user:
             if not expense.group:
                 return Response(
                     {'error': 'You do not have permission to modify this expense'},
-                    status=status.HTTP_403_FORBIDDEN
+                    status=status.HTTP_403_FORBIDDEN,
                 )
-            membership = expense.group.memberships.filter(
-                user=request.user,
-                is_active=True
-            ).first()
-            if not membership:
+            if not expense.group.memberships.filter(user=request.user, is_active=True).exists():
                 return Response(
                     {'error': 'You are not a member of this group'},
-                    status=status.HTTP_403_FORBIDDEN
+                    status=status.HTTP_403_FORBIDDEN,
                 )
-        
-        shares_data = request.data.get('shares', [])
 
+        shares_data = request.data.get('shares', [])
         if not shares_data:
             return Response(
                 {'error': 'No share data provided'},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        total_amount = sum(Decimal(str(share['amount'])) for share in shares_data)
-        expense_total = Decimal(str(expense.amount))
-        if abs(total_amount - expense_total) >= Decimal('0.01'):
+        # --- IDOR prevention ---
+        submitted_user_ids = [s['user_id'] for s in shares_data]
+        _, err = _validate_split_user_ids(expense, submitted_user_ids)
+        if err:
+            return err
+
+        total_amount = sum(Decimal(str(s['amount'])) for s in shares_data)
+        if abs(total_amount - expense.amount) >= Decimal('0.01'):
             return Response(
                 {'error': 'Share amounts do not match expense total'},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Delete existing shares
         expense.shares.all().delete()
 
-        # Create new shares
         for share_data in shares_data:
             ExpenseShare.objects.create(
                 expense=expense,
                 user_id=share_data['user_id'],
                 amount=Decimal(str(share_data['amount'])),
                 currency=expense.currency,
-                paid_by=expense.paid_by
+                paid_by=expense.paid_by,
             )
-        
+
         return Response({
             'message': 'Expense split by amounts',
-            'shares': ExpenseShareSerializer(expense.shares.all(), many=True).data
+            'shares': ExpenseShareSerializer(expense.shares.all(), many=True).data,
         })
     
     @action(detail=True, methods=['post'])
     def split_by_percentage(self, request, pk=None):
-        """Split expense by percentages"""
+        """Split expense by percentages."""
         expense = self.get_object()
         shares_data = request.data.get('shares', [])
-        
+
         if not shares_data:
             return Response(
                 {'error': 'No share data provided'},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        
-        total_percentage = sum(Decimal(str(share['percentage'])) for share in shares_data)
+
+        # --- IDOR prevention ---
+        submitted_user_ids = [s['user_id'] for s in shares_data]
+        _, err = _validate_split_user_ids(expense, submitted_user_ids)
+        if err:
+            return err
+
+        total_percentage = sum(Decimal(str(s['percentage'])) for s in shares_data)
         if abs(total_percentage - Decimal('100')) >= Decimal('0.01'):
             return Response(
                 {'error': 'Percentages do not add up to 100%'},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        
-        # Delete existing shares
+
         expense.shares.all().delete()
-        
-        # Create new shares
-        for share_data in shares_data:
-            percentage = Decimal(share_data['percentage'])
+
+        # Compute per-share amounts with remainder correction
+        computed_shares = []
+        running_total = Decimal('0')
+        for i, share_data in enumerate(shares_data):
+            percentage = Decimal(str(share_data['percentage']))
+            raw = (expense.amount * percentage / 100).quantize(Decimal('0.01'), rounding=ROUND_DOWN)
+            computed_shares.append((share_data['user_id'], raw))
+            running_total += raw
+
+        # Assign any rounding remainder to the first share
+        remainder = expense.amount - running_total
+        if remainder != Decimal('0') and computed_shares:
+            uid, amt = computed_shares[0]
+            computed_shares[0] = (uid, amt + remainder)
+
+        for user_id, amount in computed_shares:
             ExpenseShare.objects.create(
                 expense=expense,
-                user_id=share_data['user_id'],
-                amount=(expense.amount * percentage) / 100,
+                user_id=user_id,
+                amount=amount,
                 currency=expense.currency,
-                paid_by=expense.paid_by
+                paid_by=expense.paid_by,
             )
-        
+
         return Response({
             'message': 'Expense split by percentages',
-            'shares': ExpenseShareSerializer(expense.shares.all(), many=True).data
+            'shares': ExpenseShareSerializer(expense.shares.all(), many=True).data,
         })
     
     @action(detail=False)

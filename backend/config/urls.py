@@ -32,6 +32,9 @@ urlpatterns = [
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
     
+    # Consolidated dashboard (single round-trip)
+    path('api/dashboard/', include('apps.core.dashboard_urls')),
+
     # API Endpoints
     path('api/auth/', include('apps.authentication.urls')),
     path('api/expenses/', include('apps.expenses.urls')),

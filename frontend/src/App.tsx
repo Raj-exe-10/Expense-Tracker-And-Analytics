@@ -38,21 +38,8 @@ interface AuthWrapperProps {
 }
 
 const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
-  const { isAuthenticated, isLoading: loading } = useSelector((state: RootState) => state.auth);
+  const { isAuthenticated } = useSelector((state: RootState) => state.auth);
   const location = useLocation();
-  
-  if (loading) {
-    return (
-      <Box 
-        display="flex" 
-        justifyContent="center" 
-        alignItems="center" 
-        minHeight="100vh"
-      >
-        <CircularProgress />
-      </Box>
-    );
-  }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
@@ -67,20 +54,7 @@ interface PublicRouteProps {
 }
 
 const PublicRoute: React.FC<PublicRouteProps> = ({ children }) => {
-  const { isAuthenticated, isLoading: loading } = useSelector((state: RootState) => state.auth);
-  
-  if (loading) {
-    return (
-      <Box 
-        display="flex" 
-        justifyContent="center" 
-        alignItems="center" 
-        minHeight="100vh"
-      >
-        <CircularProgress />
-      </Box>
-    );
-  }
+  const { isAuthenticated } = useSelector((state: RootState) => state.auth);
 
   if (isAuthenticated) {
     return <Navigate to="/dashboard" replace />;
@@ -111,14 +85,13 @@ const AuthLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
 function App() {
   const dispatch = useDispatch<AppDispatch>();
-  const { isLoading: loading } = useSelector((state: RootState) => state.auth);
+  const { isInitialized } = useSelector((state: RootState) => state.auth);
 
   useEffect(() => {
-    // Check if user is authenticated on app start
     dispatch(checkAuthStatus());
   }, [dispatch]);
 
-  if (loading) {
+  if (!isInitialized) {
     return (
       <ThemeProvider theme={theme}>
         <CssBaseline />

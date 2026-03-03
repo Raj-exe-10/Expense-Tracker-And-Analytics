@@ -420,9 +420,11 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
         onClose={handleNotificationClose}
         PaperProps={{
           sx: {
-            width: 380,
-            maxHeight: 500,
+            width: { xs: '100vw', sm: 380 },
+            maxWidth: { xs: '100vw', sm: 380 },
+            maxHeight: { xs: '80vh', sm: 500 },
             overflow: 'hidden',
+            ...(isMobile && { left: '0 !important', right: 0 }),
           },
         }}
         transformOrigin={{ horizontal: 'right', vertical: 'top' }}
@@ -536,11 +538,12 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
         component="main"
         sx={{
           flexGrow: 1,
-          p: 3,
+          p: { xs: 1.5, sm: 2, md: 3 },
           width: { md: `calc(100% - ${drawerWidth}px)` },
           minHeight: '100vh',
           backgroundColor: theme.palette.background.default,
-          mt: 8, // Account for AppBar height
+          mt: { xs: 7, md: 8 },
+          overflowX: 'hidden',
         }}
       >
         {children}

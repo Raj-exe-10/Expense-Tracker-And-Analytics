@@ -110,23 +110,25 @@ const StatCard: React.FC<StatCardProps> = ({
       }}
       onClick={onClick}
     >
-      <CardContent sx={{ p: 2.5 }}>
+      <CardContent sx={{ p: { xs: 1.5, sm: 2, md: 2.5 }, '&:last-child': { pb: { xs: 1.5, sm: 2, md: 2.5 } } }}>
         <Box display="flex" justifyContent="space-between" alignItems="flex-start">
-          <Box flex={1}>
+          <Box flex={1} minWidth={0}>
             <Typography 
               color={gradientColor ? 'rgba(255,255,255,0.85)' : 'text.secondary'} 
               gutterBottom 
               variant="body2"
               fontWeight={500}
+              noWrap
+              sx={{ fontSize: { xs: '0.7rem', sm: '0.8rem', md: '0.875rem' } }}
             >
               {title}
             </Typography>
             <Typography 
-              variant="h4" 
               component="h2" 
               fontWeight="bold"
               color={gradientColor ? 'white' : 'text.primary'}
-              sx={{ mb: 0.5 }}
+              noWrap
+              sx={{ mb: 0.5, fontSize: { xs: '1.1rem', sm: '1.3rem', md: '2.125rem' } }}
             >
               {isCurrency && typeof value === 'number' ? `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : value}
             </Typography>
@@ -134,11 +136,13 @@ const StatCard: React.FC<StatCardProps> = ({
               <Typography 
                 variant="caption" 
                 color={gradientColor ? 'rgba(255,255,255,0.7)' : 'text.secondary'}
+                noWrap
+                sx={{ display: { xs: 'none', sm: 'block' } }}
               >
                 {subtitle}
               </Typography>
             )}
-            <Box display="flex" alignItems="center" mt={1}>
+            <Box display="flex" alignItems="center" mt={0.5} sx={{ display: { xs: 'none', md: 'flex' } }}>
               {isPositive ? (
                 <TrendingUp sx={{ color: gradientColor ? 'rgba(255,255,255,0.9)' : 'success.main', mr: 0.5 }} fontSize="small" />
               ) : (
@@ -146,7 +150,8 @@ const StatCard: React.FC<StatCardProps> = ({
               )}
               <Typography 
                 variant="body2" 
-                sx={{ color: gradientColor ? 'rgba(255,255,255,0.85)' : (isPositive ? 'success.main' : 'error.main') }}
+                noWrap
+                sx={{ color: gradientColor ? 'rgba(255,255,255,0.85)' : (isPositive ? 'success.main' : 'error.main'), fontSize: '0.75rem' }}
               >
                 {Math.abs(change).toFixed(1)}% vs last month
               </Typography>
@@ -156,10 +161,12 @@ const StatCard: React.FC<StatCardProps> = ({
             sx={{
               backgroundColor: gradientColor ? 'rgba(255,255,255,0.2)' : color,
               borderRadius: 2,
-              p: 1.5,
+              p: { xs: 1, md: 1.5 },
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              flexShrink: 0,
+              ml: 1,
             }}
           >
             {icon}
@@ -419,12 +426,12 @@ export const Dashboard: React.FC = () => {
   return (
     <Box>
       {/* Header */}
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3} flexWrap="wrap" gap={2}>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={{ xs: 2, md: 3 }} flexWrap="wrap" gap={1.5}>
         <Box>
-          <Typography variant="h4" component="h1" gutterBottom fontWeight={600}>
+          <Typography variant="h4" component="h1" gutterBottom fontWeight={600} sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2.125rem' } }}>
             Welcome back, {user?.first_name || 'User'}!
           </Typography>
-          <Typography variant="body1" color="text.secondary">
+          <Typography variant="body2" color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' } }}>
             Here's your expense summary for {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
           </Typography>
         </Box>
@@ -439,9 +446,8 @@ export const Dashboard: React.FC = () => {
             variant="contained"
             startIcon={<Add />}
             onClick={handleAddExpense}
-            size="large"
             sx={{ 
-              px: 3,
+              px: { xs: 2, md: 3 },
               background: `linear-gradient(45deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
             }}
           >
@@ -450,9 +456,9 @@ export const Dashboard: React.FC = () => {
         </Box>
       </Box>
 
-      {/* Stats Cards */}
-      <Grid container spacing={2} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} lg={2}>
+      {/* Stats Cards — 2 cols mobile, 3 cols tablet, 6 cols desktop */}
+      <Grid container spacing={{ xs: 1.5, sm: 2 }} sx={{ mb: { xs: 2, md: 4 } }}>
+        <Grid item xs={6} sm={4} lg={2}>
           <StatCard
             title="Total Expenses"
             value={stats.totalExpenses}
@@ -467,7 +473,7 @@ export const Dashboard: React.FC = () => {
             subtitle={`${stats.expenseCount} transactions`}
           />
         </Grid>
-        <Grid item xs={12} sm={6} lg={2}>
+        <Grid item xs={6} sm={4} lg={2}>
           <StatCard
             title="Active Groups"
             value={stats.groupCount}
@@ -481,7 +487,7 @@ export const Dashboard: React.FC = () => {
             subtitle="Expense sharing groups"
           />
         </Grid>
-        <Grid item xs={12} sm={6} lg={2}>
+        <Grid item xs={6} sm={4} lg={2}>
           <StatCard
             title="You Owe"
             value={stats.youOwe}
@@ -496,7 +502,7 @@ export const Dashboard: React.FC = () => {
             subtitle="Amount to pay"
           />
         </Grid>
-        <Grid item xs={12} sm={6} lg={2}>
+        <Grid item xs={6} sm={4} lg={2}>
           <StatCard
             title="You'll Receive"
             value={stats.owedToYou}
@@ -511,7 +517,7 @@ export const Dashboard: React.FC = () => {
             subtitle="Owed to you"
           />
         </Grid>
-        <Grid item xs={12} sm={6} lg={2}>
+        <Grid item xs={6} sm={4} lg={2}>
           <StatCard
             title="Net Balance"
             value={Math.abs(stats.owedToYou - stats.youOwe)}
@@ -529,7 +535,7 @@ export const Dashboard: React.FC = () => {
             subtitle={stats.owedToYou >= stats.youOwe ? "You're ahead" : "You're behind"}
           />
         </Grid>
-        <Grid item xs={12} sm={6} lg={2}>
+        <Grid item xs={6} sm={4} lg={2}>
           <StatCard
             title="Budget Used"
             value={`${budgetUsed.toFixed(1)}%`}

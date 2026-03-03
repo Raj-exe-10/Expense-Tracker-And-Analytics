@@ -27,6 +27,8 @@ interface CoreState {
   currencies: Currency[];
   tags: Tag[];
   loading: boolean;
+  currenciesLoading: boolean;
+  categoriesLoading: boolean;
   error: string | null;
 }
 
@@ -35,6 +37,8 @@ const initialState: CoreState = {
   currencies: [],
   tags: [],
   loading: false,
+  currenciesLoading: false,
+  categoriesLoading: false,
   error: null,
 };
 
@@ -99,12 +103,13 @@ const coreSlice = createSlice({
     builder
       // Fetch categories
       .addCase(fetchCategories.pending, (state) => {
+        state.categoriesLoading = true;
         state.loading = true;
         state.error = null;
       })
       .addCase(fetchCategories.fulfilled, (state, action) => {
-        state.loading = false;
-        // Handle both array response and paginated response
+        state.categoriesLoading = false;
+        state.loading = state.currenciesLoading;
         if (Array.isArray(action.payload)) {
           state.categories = action.payload;
         } else if (action.payload?.results && Array.isArray(action.payload.results)) {
@@ -114,17 +119,19 @@ const coreSlice = createSlice({
         }
       })
       .addCase(fetchCategories.rejected, (state, action) => {
-        state.loading = false;
+        state.categoriesLoading = false;
+        state.loading = state.currenciesLoading;
         state.error = action.payload as string;
       })
       // Fetch currencies
       .addCase(fetchCurrencies.pending, (state) => {
+        state.currenciesLoading = true;
         state.loading = true;
         state.error = null;
       })
       .addCase(fetchCurrencies.fulfilled, (state, action) => {
-        state.loading = false;
-        // Handle both array response and paginated response
+        state.currenciesLoading = false;
+        state.loading = state.categoriesLoading;
         if (Array.isArray(action.payload)) {
           state.currencies = action.payload;
         } else if (action.payload?.results && Array.isArray(action.payload.results)) {
@@ -134,7 +141,8 @@ const coreSlice = createSlice({
         }
       })
       .addCase(fetchCurrencies.rejected, (state, action) => {
-        state.loading = false;
+        state.currenciesLoading = false;
+        state.loading = state.categoriesLoading;
         state.error = action.payload as string;
       })
       // Fetch tags
@@ -143,11 +151,11 @@ const coreSlice = createSlice({
         state.error = null;
       })
       .addCase(fetchTags.fulfilled, (state, action) => {
-        state.loading = false;
+        state.loading = state.currenciesLoading || state.categoriesLoading;
         state.tags = action.payload;
       })
       .addCase(fetchTags.rejected, (state, action) => {
-        state.loading = false;
+        state.loading = state.currenciesLoading || state.categoriesLoading;
         state.error = action.payload as string;
       });
   },

@@ -1,156 +1,243 @@
 #!/usr/bin/env python3
 """
-Development setup script for Expense Tracker application
+One-time development setup for the Expense Tracker application.
+
+Run this ONCE before using start.ps1.  It is safe to re-run — every step
+is idempotent (skipped when already done).
+
+What it does
+------------
+1. Creates a Python virtual-environment  (backend/venv)
+2. Installs Python dependencies           (backend/requirements.txt)
+3. Creates a .env file for local dev      (backend/.env)
+4. Runs Django migrations                 (migrate --run-syncdb)
+5. Seeds currencies, categories, test users
+6. Installs Node/npm dependencies         (frontend/node_modules)
 """
 
 import os
+import platform
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
-def run_command(command, cwd=None, shell=True):
-    """Run a command and handle errors"""
+# ── Paths ────────────────────────────────────────────────────────────
+ROOT_DIR = Path(__file__).resolve().parent
+BACKEND_DIR = ROOT_DIR / "backend"
+FRONTEND_DIR = ROOT_DIR / "frontend"
+
+IS_WINDOWS = platform.system() == "Windows"
+VENV_DIR = BACKEND_DIR / "venv"
+if IS_WINDOWS:
+    VENV_PYTHON = VENV_DIR / "Scripts" / "python.exe"
+    VENV_PIP = VENV_DIR / "Scripts" / "pip.exe"
+else:
+    VENV_PYTHON = VENV_DIR / "bin" / "python"
+    VENV_PIP = VENV_DIR / "bin" / "pip"
+
+
+# ── Helpers ──────────────────────────────────────────────────────────
+
+def heading(msg: str):
+    print(f"\n{'=' * 50}")
+    print(f"  {msg}")
+    print('=' * 50)
+
+
+def step(msg: str):
+    print(f"\n  -> {msg}")
+
+
+def run(cmd, cwd=None, check=True, quiet=False):
+    """Run a shell command; returns True on success."""
+    if not quiet:
+        display = cmd if isinstance(cmd, str) else " ".join(cmd)
+        print(f"     $ {display}")
     try:
-        print(f"Running: {command}")
         result = subprocess.run(
-            command, 
-            shell=shell, 
-            cwd=cwd, 
-            capture_output=True, 
+            cmd,
+            cwd=cwd,
+            shell=isinstance(cmd, str),
+            capture_output=True,
             text=True,
-            check=True
+            check=check,
         )
-        if result.stdout:
-            print(result.stdout)
+        if result.stdout and not quiet:
+            for line in result.stdout.strip().splitlines():
+                print(f"       {line}")
         return True
-    except subprocess.CalledProcessError as e:
-        print(f"Error running command: {command}")
-        print(f"Error: {e.stderr}")
+    except subprocess.CalledProcessError as exc:
+        print(f"     ERROR: {exc.stderr.strip() if exc.stderr else exc}")
+        if check:
+            raise
         return False
 
-def setup_backend():
-    """Setup Django backend"""
-    backend_dir = Path("backend")
-    
-    print("\n🔧 Setting up Django backend...")
-    
-    # Activate virtual environment and install dependencies
-    if not run_command("pip install -r requirements.txt", cwd=backend_dir):
-        return False
-    
-    # Run migrations
-    if not run_command("python manage.py migrate", cwd=backend_dir):
-        return False
-    
-    # Create superuser (optional)
-    print("\n👤 Would you like to create a superuser? (y/n)")
-    if input().lower() == 'y':
-        run_command("python manage.py createsuperuser", cwd=backend_dir)
-    
-    # Load initial data
-    print("\n📊 Loading initial data...")
-    run_command("python manage.py loaddata initial_data.json", cwd=backend_dir)
-    
-    return True
+
+def check_prerequisite(name: str, test_cmd: str):
+    """Abort early if a required tool is missing."""
+    if shutil.which(test_cmd) is None:
+        print(f"\n  ERROR: '{name}' is not installed or not on PATH.")
+        print(f"         Please install {name} and try again.\n")
+        sys.exit(1)
+
+
+# ── Step functions ───────────────────────────────────────────────────
+
+def check_prerequisites():
+    heading("Checking prerequisites")
+    check_prerequisite("Python 3", "python")
+    check_prerequisite("Node.js", "node")
+    check_prerequisite("npm", "npm")
+    print("  All prerequisites found.")
+
+
+def setup_venv():
+    heading("Python virtual environment")
+    if VENV_PYTHON.exists():
+        print(f"  Already exists at {VENV_DIR}")
+        return
+
+    step("Creating virtual environment ...")
+    run([sys.executable, "-m", "venv", str(VENV_DIR)])
+    step("Upgrading pip ...")
+    run([str(VENV_PYTHON), "-m", "pip", "install", "--upgrade", "pip", "--quiet"])
+
+
+def install_python_deps():
+    heading("Python dependencies")
+    req_file = BACKEND_DIR / "requirements.txt"
+    if not req_file.exists():
+        print(f"  WARNING: {req_file} not found — skipping.")
+        return
+
+    step(f"Installing from {req_file.name} (this may take a minute) ...")
+    success = run(
+        [str(VENV_PIP), "install", "-r", str(req_file), "--quiet"],
+        check=False,
+    )
+    if not success:
+        step("Full install had errors — retrying with core packages only ...")
+        core = [
+            "Django", "djangorestframework", "django-cors-headers",
+            "djangorestframework-simplejwt", "django-environ",
+            "dj-database-url", "requests", "Pillow", "whitenoise",
+            "openpyxl", "reportlab", "pytz", "django-ratelimit",
+            "sentry-sdk", "django-model-utils", "django-extensions",
+            "psycopg2-binary", "cryptography", "drf-spectacular",
+        ]
+        run([str(VENV_PIP), "install", "--quiet"] + core)
+
+    print("  Python dependencies installed.")
+
+
+def create_env_file():
+    heading("Backend .env file")
+    env_file = BACKEND_DIR / ".env"
+    if env_file.exists():
+        print(f"  Already exists at {env_file}")
+        return
+
+    step("Creating .env for local development ...")
+    env_file.write_text(
+        "DEBUG=True\n"
+        "SECRET_KEY=django-insecure-dev-key-change-in-production-8f3k2j5h7g9d1s4a6\n"
+        "ALLOWED_HOSTS=localhost,127.0.0.1\n"
+        "DATABASE_URL=sqlite:///db.sqlite3\n"
+        "REDIS_URL=redis://localhost:6379/0\n"
+        "EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend\n",
+        encoding="utf-8",
+    )
+    print("  .env created.")
+
+
+def run_migrations():
+    heading("Django migrations")
+    step("Running migrate --run-syncdb ...")
+    run(
+        [str(VENV_PYTHON), "manage.py", "migrate", "--run-syncdb"],
+        cwd=BACKEND_DIR,
+    )
+    print("  Migrations applied.")
+
+
+def seed_data():
+    heading("Seeding default data")
+
+    step("Seeding currencies ...")
+    run(
+        [str(VENV_PYTHON), "manage.py", "seed_currencies"],
+        cwd=BACKEND_DIR,
+        check=False,
+    )
+
+    step("Seeding categories ...")
+    run(
+        [str(VENV_PYTHON), "manage.py", "seed_categories"],
+        cwd=BACKEND_DIR,
+        check=False,
+    )
+
+    step("Creating test users ...")
+    run(
+        [str(VENV_PYTHON), "manage.py", "create_test_users"],
+        cwd=BACKEND_DIR,
+        check=False,
+    )
+
+    print("  Default data seeded.")
+
 
 def setup_frontend():
-    """Setup React frontend"""
-    frontend_dir = Path("frontend")
-    
-    print("\n⚛️  Setting up React frontend...")
-    
-    # Install dependencies
-    if not run_command("npm install", cwd=frontend_dir):
-        return False
-    
-    return True
+    heading("Frontend (npm) dependencies")
+    node_modules = FRONTEND_DIR / "node_modules"
 
-def create_initial_data():
-    """Create initial data fixtures"""
-    backend_dir = Path("backend")
-    
-    print("\n📝 Creating initial data...")
-    
-    # Create initial currencies
-    script = '''
-import os
-import django
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
-django.setup()
+    if node_modules.exists():
+        print("  node_modules already exists — skipping npm install.")
+        return
 
-from apps.core.models import Currency, Category
-from decimal import Decimal
+    step("Running npm install (this may take a few minutes) ...")
+    run("npm install", cwd=FRONTEND_DIR)
+    print("  Frontend dependencies installed.")
 
-# Create currencies
-currencies = [
-    {"code": "USD", "name": "US Dollar", "symbol": "$", "exchange_rate_to_usd": Decimal("1.0")},
-    {"code": "EUR", "name": "Euro", "symbol": "€", "exchange_rate_to_usd": Decimal("0.85")},
-    {"code": "GBP", "name": "British Pound", "symbol": "£", "exchange_rate_to_usd": Decimal("0.75")},
-    {"code": "INR", "name": "Indian Rupee", "symbol": "₹", "exchange_rate_to_usd": Decimal("75.0")},
-]
 
-for curr_data in currencies:
-    Currency.objects.get_or_create(
-        code=curr_data["code"],
-        defaults=curr_data
-    )
-
-# Create categories
-categories = [
-    {"name": "Food & Dining", "icon": "restaurant", "color": "#FF6B6B", "is_default": True},
-    {"name": "Transportation", "icon": "directions_car", "color": "#4ECDC4", "is_default": True},
-    {"name": "Shopping", "icon": "shopping_cart", "color": "#45B7D1", "is_default": True},
-    {"name": "Entertainment", "icon": "movie", "color": "#96CEB4", "is_default": True},
-    {"name": "Bills & Utilities", "icon": "receipt", "color": "#FFEAA7", "is_default": True},
-    {"name": "Healthcare", "icon": "local_hospital", "color": "#DDA0DD", "is_default": True},
-    {"name": "Travel", "icon": "flight", "color": "#98D8C8", "is_default": True},
-    {"name": "Other", "icon": "category", "color": "#F7DC6F", "is_default": True},
-]
-
-for cat_data in categories:
-    Category.objects.get_or_create(
-        name=cat_data["name"],
-        defaults=cat_data
-    )
-
-print("Initial data created successfully!")
-'''
-    
-    with open(backend_dir / "setup_initial_data.py", "w") as f:
-        f.write(script)
-    
-    run_command("python setup_initial_data.py", cwd=backend_dir)
-    os.remove(backend_dir / "setup_initial_data.py")
+# ── Main ─────────────────────────────────────────────────────────────
 
 def main():
-    """Main setup function"""
-    print("🚀 Welcome to Expense Tracker Setup!")
-    print("====================================")
-    
-    # Check if we're in the right directory
-    if not Path("backend").exists() or not Path("frontend").exists():
-        print("❌ Please run this script from the project root directory")
+    print()
+    print("*" * 50)
+    print("  Expense Tracker — Development Setup")
+    print("*" * 50)
+
+    # Sanity check: are we in the project root?
+    if not BACKEND_DIR.exists() or not FRONTEND_DIR.exists():
+        print("\n  ERROR: Run this script from the project root directory")
+        print(f"         Expected to find: {BACKEND_DIR} and {FRONTEND_DIR}")
         sys.exit(1)
-    
-    # Setup backend
-    if not setup_backend():
-        print("❌ Backend setup failed")
-        sys.exit(1)
-    
-    # Setup frontend  
-    if not setup_frontend():
-        print("❌ Frontend setup failed")
-        sys.exit(1)
-    
-    # Create initial data
-    create_initial_data()
-    
-    print("\n✅ Setup completed successfully!")
-    print("\n🎉 Next steps:")
-    print("1. Start the backend: cd backend && python manage.py runserver")
-    print("2. Start the frontend: cd frontend && npm start")
-    print("3. Start Celery worker: cd backend && celery -A config worker -l info")
-    print("4. Visit http://localhost:3000 to use the application")
+
+    check_prerequisites()
+    setup_venv()
+    install_python_deps()
+    create_env_file()
+    run_migrations()
+    seed_data()
+    setup_frontend()
+
+    heading("Setup complete!")
+    print(
+        "  Everything is ready.  Run start.ps1 to launch the servers.\n"
+        "\n"
+        "  Servers:\n"
+        "    Frontend    -> http://localhost:3000\n"
+        "    Backend API -> http://localhost:8000/api/\n"
+        "    Admin       -> http://localhost:8000/admin/\n"
+        "\n"
+        "  Test logins:\n"
+        "    alice@test.com   / Test@123\n"
+        "    bob@test.com     / Test@123\n"
+        "    charlie@test.com / Test@123\n"
+    )
+
 
 if __name__ == "__main__":
     main()

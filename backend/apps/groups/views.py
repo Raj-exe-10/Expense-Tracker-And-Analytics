@@ -286,99 +286,113 @@ class GroupViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['get'])
     def statistics(self, request, pk=None):
-        """Get group statistics"""
+        """Get group statistics (single-query aggregates)."""
         group = self.get_object()
-        
-        # Get date range
+
         days = int(request.query_params.get('days', 30))
         start_date = timezone.now() - timedelta(days=days)
-        
-        # Get expenses
-        expenses = Expense.objects.filter(
+
+        expenses_qs = Expense.objects.filter(
             group=group,
-            date__gte=start_date
+            expense_date__gte=start_date,
         )
-        
-        # Calculate statistics
-        stats = {
-            'total_expenses': expenses.aggregate(Sum('amount'))['amount__sum'] or 0,
-            'expense_count': expenses.count(),
-            'average_expense': expenses.aggregate(Avg('amount'))['amount__avg'] or 0,
-            'member_count': group.members.count(),
-            'member_expenses': [],
-            'category_breakdown': [],
-            'monthly_trend': []
-        }
-        
-        # Member expenses
-        member_stats = expenses.values(
-            'created_by__username',
-            'created_by__first_name',
-            'created_by__last_name'
-        ).annotate(
+
+        agg = expenses_qs.aggregate(
             total=Sum('amount'),
-            count=Count('id')
-        ).order_by('-total')
-        
-        for member_stat in member_stats:
-            stats['member_expenses'].append({
-                'username': member_stat['created_by__username'],
-                'name': f"{member_stat['created_by__first_name']} {member_stat['created_by__last_name']}",
-                'total': float(member_stat['total']),
-                'count': member_stat['count']
-            })
-        
-        # Category breakdown
-        category_stats = expenses.values('category__name').annotate(
-            total=Sum('amount'),
-            count=Count('id')
-        ).order_by('-total')[:5]
-        stats['category_breakdown'] = list(category_stats)
-        
-        return Response(stats)
-    
+            count=Count('id'),
+            avg=Avg('amount'),
+        )
+        member_count = group.memberships.filter(is_active=True).count()
+
+        member_stats = list(
+            expenses_qs
+            .values(
+                'paid_by__username',
+                'paid_by__first_name',
+                'paid_by__last_name',
+            )
+            .annotate(total=Sum('amount'), count=Count('id'))
+            .order_by('-total')
+        )
+
+        category_stats = list(
+            expenses_qs
+            .values('category__name')
+            .annotate(total=Sum('amount'), count=Count('id'))
+            .order_by('-total')[:5]
+        )
+
+        return Response({
+            'total_expenses': float(agg['total'] or 0),
+            'expense_count': agg['count'] or 0,
+            'average_expense': float(agg['avg'] or 0),
+            'member_count': member_count,
+            'member_expenses': [
+                {
+                    'username': m['paid_by__username'],
+                    'name': f"{m['paid_by__first_name']} {m['paid_by__last_name']}".strip(),
+                    'total': float(m['total']),
+                    'count': m['count'],
+                }
+                for m in member_stats
+            ],
+            'category_breakdown': category_stats,
+            'monthly_trend': [],
+        })
+
     @action(detail=True, methods=['get'])
     def balances(self, request, pk=None):
-        """Get group member balances"""
+        """Get group member balances.
+
+        Replaced nested Python loops (expense → shares) with two aggregate
+        queries: one for total paid per user, one for total share per user.
+        """
         group = self.get_object()
-        members = group.members.all()
-        balances = {}
-        
-        # Initialize balances
-        for member in members:
-            balances[member.id] = {
-                'user_id': member.id,
-                'username': member.username,
-                'name': member.get_full_name(),
-                'balance': 0,
-                'paid': 0,
-                'share': 0
+
+        # Active members — single query, build lookup dict
+        memberships = group.memberships.filter(is_active=True).select_related('user')
+        members_map = {}
+        for m in memberships:
+            members_map[m.user_id] = {
+                'user_id': m.user_id,
+                'username': m.user.username,
+                'name': m.user.get_full_name(),
+                'balance': 0.0,
+                'paid': 0.0,
+                'share': 0.0,
             }
-        
-        # Calculate balances from expenses
-        expenses = Expense.objects.filter(
-            group=group,
-            is_settled=False
+
+        unsettled_shares = ExpenseShare.objects.filter(
+            expense__group=group,
+            expense__is_settled=False,
         )
-        
-        for expense in expenses:
-            # Add to paid amount for creator
-            if expense.created_by.id in balances:
-                balances[expense.created_by.id]['paid'] += float(expense.amount)
-            
-            # Add shares
-            shares = expense.shares.all()
-            for share in shares:
-                if share.user.id in balances:
-                    balances[share.user.id]['share'] += float(share.amount)
-        
-        # Calculate net balances
-        for member_id in balances:
-            balances[member_id]['balance'] = (
-                balances[member_id]['paid'] - balances[member_id]['share']
-            )
-        
-        return Response(list(balances.values()))
+
+        # Total each user PAID (they are paid_by on shares where user != paid_by)
+        paid_agg = (
+            unsettled_shares
+            .values('paid_by_id')
+            .annotate(total=Sum('amount'))
+        )
+        for row in paid_agg:
+            uid = row['paid_by_id']
+            if uid in members_map:
+                members_map[uid]['paid'] = float(row['total'] or 0)
+
+        # Total each user OWES (their own share rows)
+        share_agg = (
+            unsettled_shares
+            .values('user_id')
+            .annotate(total=Sum('amount'))
+        )
+        for row in share_agg:
+            uid = row['user_id']
+            if uid in members_map:
+                members_map[uid]['share'] = float(row['total'] or 0)
+
+        for entry in members_map.values():
+            entry['balance'] = round(entry['paid'] - entry['share'], 2)
+
+        return Response(list(members_map.values()))
     
     @action(detail=True, methods=['get'])
     def activities(self, request, pk=None):

@@ -1,5 +1,7 @@
 import { createTheme } from '@mui/material/styles';
 
+const MIN_TOUCH = 44;
+
 export const theme = createTheme({
   palette: {
     primary: {
@@ -38,52 +40,60 @@ export const theme = createTheme({
   },
   typography: {
     fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
-    h1: {
-      fontSize: '2.5rem',
-      fontWeight: 600,
-    },
-    h2: {
-      fontSize: '2rem',
-      fontWeight: 600,
-    },
-    h3: {
-      fontSize: '1.75rem',
-      fontWeight: 600,
-    },
-    h4: {
-      fontSize: '1.5rem',
-      fontWeight: 500,
-    },
-    h5: {
-      fontSize: '1.25rem',
-      fontWeight: 500,
-    },
-    h6: {
-      fontSize: '1rem',
-      fontWeight: 500,
-    },
-    button: {
-      textTransform: 'none',
-      fontWeight: 500,
-    },
+    h1: { fontSize: '2.5rem', fontWeight: 600 },
+    h2: { fontSize: '2rem', fontWeight: 600 },
+    h3: { fontSize: '1.75rem', fontWeight: 600 },
+    h4: { fontSize: '1.5rem', fontWeight: 500 },
+    h5: { fontSize: '1.25rem', fontWeight: 500 },
+    h6: { fontSize: '1rem', fontWeight: 500 },
+    button: { textTransform: 'none', fontWeight: 500 },
   },
   components: {
     MuiButton: {
       styleOverrides: {
         root: {
           borderRadius: 8,
+          minHeight: MIN_TOUCH,
           padding: '10px 24px',
           boxShadow: 'none',
           '&:hover': {
             boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
           },
         },
+        sizeSmall: {
+          minHeight: MIN_TOUCH,
+          padding: '6px 16px',
+        },
         containedPrimary: {
           backgroundColor: '#1976d2',
-          '&:hover': {
-            backgroundColor: '#1565c0',
-          },
+          '&:hover': { backgroundColor: '#1565c0' },
         },
+      },
+    },
+    MuiIconButton: {
+      styleOverrides: {
+        root: { minWidth: MIN_TOUCH, minHeight: MIN_TOUCH },
+        sizeSmall: { minWidth: MIN_TOUCH, minHeight: MIN_TOUCH },
+      },
+    },
+    MuiListItemButton: {
+      styleOverrides: {
+        root: { minHeight: 48 },
+      },
+    },
+    MuiTab: {
+      styleOverrides: {
+        root: { minHeight: 48 },
+      },
+    },
+    MuiToggleButton: {
+      styleOverrides: {
+        root: { minHeight: MIN_TOUCH },
+      },
+    },
+    MuiMenuItem: {
+      styleOverrides: {
+        root: { minHeight: MIN_TOUCH },
       },
     },
     MuiCard: {
@@ -100,23 +110,28 @@ export const theme = createTheme({
     MuiTextField: {
       styleOverrides: {
         root: {
-          '& .MuiOutlinedInput-root': {
-            borderRadius: 8,
-          },
+          '& .MuiOutlinedInput-root': { borderRadius: 8 },
+          '& .MuiInputBase-input': { minHeight: '1.5em' },
         },
       },
     },
     MuiChip: {
       styleOverrides: {
-        root: {
-          borderRadius: 16,
-        },
+        root: { borderRadius: 16 },
       },
     },
     MuiAppBar: {
       styleOverrides: {
+        root: { boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)' },
+      },
+    },
+    MuiTableCell: {
+      styleOverrides: {
         root: {
-          boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
+          '@media (max-width: 600px)': {
+            padding: '8px 6px',
+            fontSize: '0.8125rem',
+          },
         },
       },
     },

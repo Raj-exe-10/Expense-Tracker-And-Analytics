@@ -369,6 +369,12 @@ export const notificationsAPI = {
     api.post('/notifications/preferences/', data).then(res => res.data),
 };
 
+// Dashboard API (consolidated single-request payload)
+export const dashboardAPI = {
+  getSummary: () =>
+    api.get('/dashboard/').then(res => res.data),
+};
+
 // Analytics API
 export const analyticsAPI = {
   getDashboardStats: (params?: any) =>

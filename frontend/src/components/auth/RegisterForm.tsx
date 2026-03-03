@@ -46,6 +46,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchToLogin }) =
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [registrationSuccess, setRegistrationSuccess] = useState(false);
 
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
@@ -143,8 +144,8 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchToLogin }) =
     if (!validateForm()) return;
 
     try {
-      const result = await dispatch(registerUser({
-        username: formData.email.split('@')[0], // Generate username from email
+      await dispatch(registerUser({
+        username: formData.email.split('@')[0],
         first_name: formData.firstName.trim(),
         last_name: formData.lastName.trim(),
         email: formData.email.trim(),
@@ -152,17 +153,17 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchToLogin }) =
         password_confirm: formData.confirmPassword,
       })).unwrap();
       
-      // Show success message and redirect to login
-      // Registration successful - user can now login
-      navigate('/login', { 
-        state: { 
-          message: 'Registration successful! Please login with your credentials.',
-          email: formData.email.trim() 
-        } 
-      });
+      setRegistrationSuccess(true);
+
+      setTimeout(() => {
+        navigate('/login', { 
+          state: { 
+            message: 'Registration successful! Please login with your credentials.',
+            email: formData.email.trim() 
+          } 
+        });
+      }, 1500);
     } catch (error: any) {
-      // Error is already handled by the slice and displayed in the error state
-      // Log for debugging
       console.error('Registration failed:', error);
     }
   };
@@ -187,7 +188,13 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchToLogin }) =
           </Typography>
         </Box>
 
-        {error && (
+        {registrationSuccess && (
+          <Alert severity="success" sx={{ mb: 2 }}>
+            Account created successfully! Redirecting to login...
+          </Alert>
+        )}
+
+        {error && !registrationSuccess && (
           <Alert severity="error" sx={{ mb: 2 }} onClose={() => dispatch(clearError())}>
             {typeof error === 'string' 
               ? error 
@@ -360,10 +367,10 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchToLogin }) =
             fullWidth
             variant="contained"
             size="large"
-            disabled={loading}
+            disabled={loading || registrationSuccess}
             sx={{ mt: 2, mb: 2 }}
           >
-            {loading ? <CircularProgress size={24} /> : 'Create Account'}
+            {loading ? <CircularProgress size={24} /> : registrationSuccess ? 'Redirecting...' : 'Create Account'}
           </Button>
 
           <Divider sx={{ my: 2 }}>

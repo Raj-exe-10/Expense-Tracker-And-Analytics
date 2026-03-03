@@ -86,6 +86,13 @@ class Notification(UUIDModel, TimeStampedModel):
             models.Index(fields=['user', 'is_read', 'created_at']),
             models.Index(fields=['notification_type', 'created_at']),
             models.Index(fields=['priority', 'is_sent']),
+            # Partial index: only unread notifications — covers the badge-count
+            # and notification-list queries that dominate read traffic.
+            models.Index(
+                fields=['user', '-created_at'],
+                name='idx_notifications_unread',
+                condition=models.Q(is_read=False),
+            ),
         ]
     
     def __str__(self):

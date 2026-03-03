@@ -102,7 +102,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
   const { id: routeId } = useParams();
   
   const { groups: storeGroups } = useAppSelector((state) => state.groups);
-  const { categories, currencies, loading: coreLoading } = useAppSelector((state) => state.core);
+  const { categories, currencies, currenciesLoading, categoriesLoading, loading: coreLoading } = useAppSelector((state) => state.core);
   const { currentExpense, loading } = useAppSelector((state) => state.expenses);
   const { user: currentUser } = useAppSelector((state) => state.auth);
   
@@ -153,6 +153,25 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
       .then((data: any) => setUserCategories(Array.isArray(data) ? data : data?.results ?? []))
       .catch(() => setUserCategories([]));
   }, [dispatch]);
+
+  // One-time retry if currencies/categories came back empty (handles transient failures)
+  const [retried, setRetried] = useState(false);
+  useEffect(() => {
+    if (retried) return;
+    const timer = setTimeout(() => {
+      let didRetry = false;
+      if (!currenciesLoading && currenciesArray.length === 0) {
+        dispatch(fetchCurrencies());
+        didRetry = true;
+      }
+      if (!categoriesLoading && categoriesArray.length === 0) {
+        dispatch(fetchCategories());
+        didRetry = true;
+      }
+      if (didRetry) setRetried(true);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [currenciesLoading, categoriesLoading, currenciesArray.length, categoriesArray.length, dispatch, retried]);
 
   // Set current user as default payer
   useEffect(() => {
@@ -661,7 +680,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
                         fullWidth
                         label="Amount"
                         name="amount"
-                        type="number"
+                        type="text"
                         value={formData.amount}
                         onChange={handleInputChange}
                         error={!!errors.amount}
@@ -674,16 +693,17 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
                             </InputAdornment>
                           ),
                         }}
-                        inputProps={{ step: '0.01', min: '0' }}
+                        inputProps={{ inputMode: 'decimal', pattern: '[0-9]*\\.?[0-9]*', step: '0.01', min: '0' }}
                       />
                     </Grid>
                     <Grid item xs={12} sm={5}>
                       <FormControl fullWidth required error={!!errors.currency_id}>
-                        <InputLabel>Currency</InputLabel>
+                        <InputLabel>Currency *</InputLabel>
                         <Select
                           value={formData.currency_id}
                           onChange={(e) => setFormData(prev => ({ ...prev, currency_id: e.target.value }))}
-                          label="Currency"
+                          label="Currency *"
+                          disabled={currenciesLoading}
                         >
                           {currenciesArray.map((currency) => (
                             <MenuItem key={currency.id} value={String(currency.id)}>
@@ -691,6 +711,16 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
                             </MenuItem>
                           ))}
                         </Select>
+                        {currenciesLoading && (
+                          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+                            Loading currencies...
+                          </Typography>
+                        )}
+                        {!currenciesLoading && currenciesArray.length === 0 && (
+                          <Typography variant="caption" color="error" sx={{ mt: 0.5 }}>
+                            No currencies available. Please check your connection.
+                          </Typography>
+                        )}
                       </FormControl>
                     </Grid>
                     
@@ -741,6 +771,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
                                 : ''
                           }
                           label="Category"
+                          disabled={categoriesLoading}
                           onChange={(e) => {
                             const selectedValue = (e.target.value as string) || '';
                             if (selectedValue.startsWith('u_')) {
@@ -784,6 +815,11 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
                             </>
                           )}
                         </Select>
+                        {categoriesLoading && (
+                          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+                            Loading categories...
+                          </Typography>
+                        )}
                       </FormControl>
                     </Grid>
                     
@@ -1096,7 +1132,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
                                     <ListItemSecondaryAction>
                                       <TextField
                                         size="small"
-                                        type="number"
+                                        type="text"
                                         value={formData.split_type === 'percentage' ? share.percentage.toFixed(1) : share.amount.toFixed(2)}
                                         onChange={(e) => handleShareChange(
                                           share.user_id,
@@ -1111,8 +1147,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
                                             <InputAdornment position="end">%</InputAdornment>
                                           ) : null,
                                         }}
-                                        sx={{ width: 100 }}
-                                        inputProps={{ step: '0.01', min: '0' }}
+                                        inputProps={{ inputMode: 'decimal', pattern: '[0-9]*\\.?[0-9]*', step: '0.01', min: '0' }}
+                                        sx={{ width: 110 }}
                                       />
                                     </ListItemSecondaryAction>
                                   )}

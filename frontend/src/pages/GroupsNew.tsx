@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Button,
@@ -26,13 +26,13 @@ import {
   ListItemAvatar,
   ListItemText,
   ListItemSecondaryAction,
-  Checkbox,
+  Tooltip,
+  InputAdornment,
+  CircularProgress,
+  Autocomplete,
   FormControl,
   InputLabel,
   Select,
-  OutlinedInput,
-  Tooltip,
-  InputAdornment,
 } from '@mui/material';
 import {
   Add,
@@ -48,40 +48,76 @@ import {
   PersonRemove,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { useAppContext } from '../context/AppContext';
+import { useAppDispatch, useAppSelector } from '../hooks/redux';
+import {
+  fetchGroups,
+  createGroup,
+  updateGroup,
+  deleteGroup,
+  fetchGroupMembers,
+  searchUsers,
+  addMember,
+  removeMember,
+  leaveGroup,
+  getInviteLink,
+  clearSearchedUsers,
+  clearInviteLink,
+} from '../store/slices/groupSlice';
+import { fetchCurrencies } from '../store/slices/coreSlice';
 
 const Groups: React.FC = () => {
   const navigate = useNavigate();
-  const { 
-    groups, 
-    allMembers, 
-    addGroup, 
-    updateGroup, 
-    deleteGroup, 
-    addMemberToGroup, 
-    removeMemberFromGroup, 
-    setCurrentFilter 
-  } = useAppContext();
-  
+  const dispatch = useAppDispatch();
+
+  const {
+    groups,
+    currentGroupMembers,
+    searchedUsers,
+    inviteLink,
+    loading,
+    membersLoading,
+    error,
+  } = useAppSelector((state) => state.groups);
+
+  const { currencies } = useAppSelector((state) => state.core);
+  const currenciesArray = Array.isArray(currencies) ? currencies : [];
+
   const [openDialog, setOpenDialog] = useState(false);
   const [membersDialog, setMembersDialog] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<any>(null);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [menuGroupId, setMenuGroupId] = useState<string | null>(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
-  const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    currency_id: 'USD',
-    members: [] as any[],
-  });
-  const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
-  const [inviteLink, setInviteLink] = useState('');
+  const [formData, setFormData] = useState({ name: '', description: '', currency: '' });
   const [manageMembersGroup, setManageMembersGroup] = useState<any>(null);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [selectedUserToAdd, setSelectedUserToAdd] = useState<any>(null);
+
+  useEffect(() => {
+    dispatch(fetchGroups());
+    dispatch(fetchCurrencies());
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (currenciesArray.length > 0 && !formData.currency) {
+      const usd = currenciesArray.find((c: any) => c.code === 'USD');
+      const defaultCurrency = usd || currenciesArray[0];
+      if (defaultCurrency) {
+        setFormData(prev => ({ ...prev, currency: String(defaultCurrency.id) }));
+      }
+    }
+  }, [currenciesArray, formData.currency]);
+
+  useEffect(() => {
+    if (error) {
+      setSnackbar({ open: true, message: error, severity: 'error' });
+    }
+  }, [error]);
 
   const handleCreateGroup = () => {
-    setFormData({ name: '', description: '', currency_id: 'USD', members: [] });
-    setSelectedMembers([]);
+    const usd = currenciesArray.find((c: any) => c.code === 'USD');
+    const defaultCurrency = usd || currenciesArray[0];
+    setFormData({ name: '', description: '', currency: defaultCurrency ? String(defaultCurrency.id) : '' });
     setSelectedGroup(null);
     setOpenDialog(true);
   };
@@ -89,45 +125,36 @@ const Groups: React.FC = () => {
   const handleCloseDialog = () => {
     setOpenDialog(false);
     setSelectedGroup(null);
-    setFormData({ name: '', description: '', currency_id: 'USD', members: [] });
-    setSelectedMembers([]);
+    const usd = currenciesArray.find((c: any) => c.code === 'USD');
+    const defaultCurrency = usd || currenciesArray[0];
+    setFormData({ name: '', description: '', currency: defaultCurrency ? String(defaultCurrency.id) : '' });
   };
 
-  const handleSubmit = () => {
-    if (formData.name.trim()) {
-      const membersToAdd = allMembers.filter(m => selectedMembers.includes(m.id));
-      
+  const handleSubmit = async () => {
+    if (!formData.name.trim()) return;
+
+    const currencyId = formData.currency ? parseInt(formData.currency, 10) : 1;
+
+    try {
       if (selectedGroup) {
-        // Update existing group
-        updateGroup(selectedGroup.id, {
-          name: formData.name,
-          description: formData.description,
-        });
+        await dispatch(
+          updateGroup({ id: selectedGroup.id, data: { name: formData.name, description: formData.description, currency: currencyId } as any })
+        ).unwrap();
         setSnackbar({ open: true, message: 'Group updated successfully!', severity: 'success' });
       } else {
-        // Create new group
-        addGroup({
-          name: formData.name,
-          description: formData.description,
-          members: membersToAdd,
-          currency_id: formData.currency_id,
-        });
+        await dispatch(
+          createGroup({ name: formData.name, description: formData.description, currency: currencyId })
+        ).unwrap();
         setSnackbar({ open: true, message: 'Group created successfully!', severity: 'success' });
       }
       handleCloseDialog();
+    } catch {
+      setSnackbar({ open: true, message: 'Operation failed. Please try again.', severity: 'error' });
     }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
-
-  const handleMemberChange = (event: any) => {
-    const value = event.target.value;
-    setSelectedMembers(typeof value === 'string' ? value.split(',') : value);
+    setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, groupId: string) => {
@@ -141,14 +168,15 @@ const Groups: React.FC = () => {
   };
 
   const handleViewExpenses = (groupId: string) => {
-    setCurrentFilter({ type: 'group', value: groupId });
-    navigate('/expenses');
+    navigate(`/expenses?group_id=${groupId}`);
   };
 
   const handleInvite = (groupId: string) => {
-    const group = groups.find(g => g.id === groupId);
+    const group = groups.find((g) => g.id === groupId);
     if (group) {
       setManageMembersGroup(group);
+      dispatch(fetchGroupMembers(groupId));
+      dispatch(getInviteLink({ groupId }));
       setMembersDialog(true);
       handleMenuClose();
     }
@@ -156,77 +184,106 @@ const Groups: React.FC = () => {
 
   const handleEditGroup = (groupId: string) => {
     handleMenuClose();
-    const group = groups.find(g => g.id === groupId);
+    const group = groups.find((g) => g.id === groupId);
     if (group) {
       setSelectedGroup(group);
-      setFormData({ 
-        name: group.name, 
-        description: group.description, 
-        currency_id: group.currency_id || 'USD',
-        members: group.members 
+      setFormData({
+        name: group.name,
+        description: group.description || '',
+        currency: group.currency ? String(group.currency) : '',
       });
-      setSelectedMembers(group.members.map(m => m.id));
       setOpenDialog(true);
     }
   };
 
-  const handleDeleteGroup = (groupId: string) => {
+  const handleDeleteGroup = async (groupId: string) => {
     handleMenuClose();
-    deleteGroup(groupId);
-    setSnackbar({ open: true, message: 'Group deleted', severity: 'success' });
-  };
-
-  const handleExitGroup = (groupId: string) => {
-    handleMenuClose();
-    // In a real app, this would remove the current user from the group
-    setSnackbar({ open: true, message: 'You have left the group', severity: 'success' });
-  };
-
-  const handleAddMembers = () => {
-    if (manageMembersGroup) {
-      const membersToAdd = allMembers.filter(m => 
-        selectedMembers.includes(m.id) && 
-        !manageMembersGroup.members.some((gm: any) => gm.id === m.id)
-      );
-      
-      membersToAdd.forEach(member => {
-        addMemberToGroup(manageMembersGroup.id, member);
-      });
-      
-      setSnackbar({ open: true, message: 'Members added successfully!', severity: 'success' });
-      setMembersDialog(false);
-      setSelectedMembers([]);
+    try {
+      await dispatch(deleteGroup(groupId)).unwrap();
+      setSnackbar({ open: true, message: 'Group deleted', severity: 'success' });
+    } catch {
+      setSnackbar({ open: true, message: 'Failed to delete group', severity: 'error' });
     }
   };
 
-  const handleRemoveMember = (groupId: string, memberId: string) => {
-    removeMemberFromGroup(groupId, memberId);
-    setSnackbar({ open: true, message: 'Member removed from group', severity: 'success' });
+  const handleExitGroup = async (groupId: string) => {
+    handleMenuClose();
+    try {
+      await dispatch(leaveGroup(groupId)).unwrap();
+      setSnackbar({ open: true, message: 'You have left the group', severity: 'success' });
+    } catch {
+      setSnackbar({ open: true, message: 'Failed to leave group', severity: 'error' });
+    }
+  };
+
+  const handleCloseMembersDialog = () => {
+    setMembersDialog(false);
+    setSelectedUserToAdd(null);
+    setUserSearchQuery('');
+    dispatch(clearSearchedUsers());
+    dispatch(clearInviteLink());
+  };
+
+  const handleUserSearch = useCallback(
+    (query: string) => {
+      setUserSearchQuery(query);
+      if (query.length >= 2 && manageMembersGroup) {
+        dispatch(searchUsers({ query, groupId: manageMembersGroup.id }));
+      } else {
+        dispatch(clearSearchedUsers());
+      }
+    },
+    [dispatch, manageMembersGroup],
+  );
+
+  const handleAddMember = async () => {
+    if (!manageMembersGroup || !selectedUserToAdd) return;
+    try {
+      await dispatch(addMember({ groupId: manageMembersGroup.id, userId: selectedUserToAdd.id })).unwrap();
+      setSnackbar({ open: true, message: 'Member added successfully!', severity: 'success' });
+      setSelectedUserToAdd(null);
+      setUserSearchQuery('');
+      dispatch(clearSearchedUsers());
+      dispatch(fetchGroupMembers(manageMembersGroup.id));
+    } catch {
+      setSnackbar({ open: true, message: 'Failed to add member', severity: 'error' });
+    }
+  };
+
+  const handleRemoveMember = async (groupId: string, userId: string) => {
+    try {
+      await dispatch(removeMember({ groupId, userId })).unwrap();
+      setSnackbar({ open: true, message: 'Member removed from group', severity: 'success' });
+    } catch {
+      setSnackbar({ open: true, message: 'Failed to remove member', severity: 'error' });
+    }
   };
 
   const handleCopyInviteLink = () => {
-    const link = `${window.location.origin}/join-group/${manageMembersGroup?.id}`;
+    const link = inviteLink || `${window.location.origin}/join-group/${manageMembersGroup?.invite_code}`;
     navigator.clipboard.writeText(link);
-    setInviteLink(link);
     setSnackbar({ open: true, message: 'Invite link copied to clipboard!', severity: 'success' });
   };
+
+  if (loading && groups.length === 0) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="50vh">
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4">Groups</Typography>
-        <Button
-          variant="contained"
-          startIcon={<Add />}
-          onClick={handleCreateGroup}
-          size="large"
-        >
+        <Button variant="contained" startIcon={<Add />} onClick={handleCreateGroup} size="large">
           Create Group
         </Button>
       </Box>
 
       <Grid container spacing={3}>
-        {groups.map((group: any) => (
+        {groups.map((group) => (
           <Grid item xs={12} sm={6} md={4} key={group.id}>
             <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
               <CardContent sx={{ flexGrow: 1 }}>
@@ -244,33 +301,20 @@ const Groups: React.FC = () => {
                       </Typography>
                     </Box>
                   </Box>
-                  <IconButton 
-                    size="small"
-                    onClick={(e) => handleMenuOpen(e, group.id)}
-                  >
+                  <IconButton size="small" onClick={(e) => handleMenuOpen(e, group.id)}>
                     <MoreVert />
                   </IconButton>
                 </Box>
 
                 <Box mb={2}>
                   <Typography variant="body2" color="text.secondary" gutterBottom>
-                    Members ({group.members?.length || 0})
+                    Members ({group.member_count || 0})
                   </Typography>
                   <AvatarGroup max={4} sx={{ justifyContent: 'flex-start' }}>
-                    {group.members?.map((member: any) => (
-                      <Tooltip key={member.id} title={member.name}>
-                        <Avatar sx={{ width: 32, height: 32 }}>
-                          {member.name?.[0]}
-                        </Avatar>
-                      </Tooltip>
-                    ))}
                     <Tooltip title="Add members">
-                      <Avatar 
+                      <Avatar
                         sx={{ width: 32, height: 32, cursor: 'pointer', bgcolor: 'grey.400' }}
-                        onClick={() => {
-                          setManageMembersGroup(group);
-                          setMembersDialog(true);
-                        }}
+                        onClick={() => handleInvite(group.id)}
                       >
                         <Add fontSize="small" />
                       </Avatar>
@@ -284,7 +328,7 @@ const Groups: React.FC = () => {
                       Total Expenses
                     </Typography>
                     <Typography variant="h6">
-                      ${group.totalExpenses?.toFixed(2) || '0.00'}
+                      ${parseFloat(group.total_expenses || '0').toFixed(2)}
                     </Typography>
                   </Box>
                   <Box textAlign="right">
@@ -293,26 +337,19 @@ const Groups: React.FC = () => {
                     </Typography>
                     <Typography
                       variant="h6"
-                      color={group.balance >= 0 ? 'success.main' : 'error.main'}
+                      color={parseFloat(group.user_balance || '0') >= 0 ? 'success.main' : 'error.main'}
                     >
-                      {group.balance >= 0 ? '+' : ''}${Math.abs(group.balance || 0).toFixed(2)}
+                      {parseFloat(group.user_balance || '0') >= 0 ? '+' : ''}
+                      ${Math.abs(parseFloat(group.user_balance || '0')).toFixed(2)}
                     </Typography>
                   </Box>
                 </Box>
               </CardContent>
               <CardActions>
-                <Button 
-                  size="small" 
-                  startIcon={<AttachMoney />}
-                  onClick={() => handleViewExpenses(group.id)}
-                >
+                <Button size="small" startIcon={<AttachMoney />} onClick={() => handleViewExpenses(group.id)}>
                   View Expenses
                 </Button>
-                <Button 
-                  size="small" 
-                  startIcon={<PersonAdd />}
-                  onClick={() => handleInvite(group.id)}
-                >
+                <Button size="small" startIcon={<PersonAdd />} onClick={() => handleInvite(group.id)}>
                   Manage Members
                 </Button>
               </CardActions>
@@ -320,16 +357,9 @@ const Groups: React.FC = () => {
           </Grid>
         ))}
 
-        {/* Empty state */}
         {groups.length === 0 && (
           <Grid item xs={12}>
-            <Box
-              display="flex"
-              flexDirection="column"
-              alignItems="center"
-              justifyContent="center"
-              py={8}
-            >
+            <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" py={8}>
               <GroupIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
               <Typography variant="h6" color="text.secondary" gutterBottom>
                 No groups yet
@@ -337,11 +367,7 @@ const Groups: React.FC = () => {
               <Typography variant="body2" color="text.secondary" mb={3}>
                 Create your first group to start sharing expenses
               </Typography>
-              <Button
-                variant="contained"
-                startIcon={<Add />}
-                onClick={handleCreateGroup}
-              >
+              <Button variant="contained" startIcon={<Add />} onClick={handleCreateGroup}>
                 Create Your First Group
               </Button>
             </Box>
@@ -349,11 +375,9 @@ const Groups: React.FC = () => {
         )}
       </Grid>
 
-      {/* Create/Edit Group Dialog */}
+      {/* Create / Edit Group Dialog */}
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          {selectedGroup ? 'Edit Group' : 'Create New Group'}
-        </DialogTitle>
+        <DialogTitle>{selectedGroup ? 'Edit Group' : 'Create New Group'}</DialogTitle>
         <DialogContent>
           <Box pt={1}>
             <TextField
@@ -375,111 +399,119 @@ const Groups: React.FC = () => {
               multiline
               rows={3}
             />
-            {!selectedGroup && (
-              <FormControl fullWidth margin="normal">
-                <InputLabel>Select Members</InputLabel>
-                <Select
-                  multiple
-                  value={selectedMembers}
-                  onChange={handleMemberChange}
-                  input={<OutlinedInput label="Select Members" />}
-                  renderValue={(selected) => (
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                      {selected.map((value) => {
-                        const member = allMembers.find(m => m.id === value);
-                        return <Chip key={value} label={member?.name} size="small" />;
-                      })}
-                    </Box>
-                  )}
-                >
-                  {allMembers.map((member) => (
-                    <MenuItem key={member.id} value={member.id}>
-                      <Checkbox checked={selectedMembers.indexOf(member.id) > -1} />
-                      <ListItemText primary={member.name} secondary={member.email} />
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            )}
+            <FormControl fullWidth margin="normal" required>
+              <InputLabel>Currency</InputLabel>
+              <Select
+                value={formData.currency}
+                onChange={(e) => setFormData(prev => ({ ...prev, currency: e.target.value as string }))}
+                label="Currency"
+              >
+                {currenciesArray.map((currency: any) => (
+                  <MenuItem key={currency.id} value={String(currency.id)}>
+                    {currency.symbol} {currency.code} — {currency.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
           </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDialog}>Cancel</Button>
-          <Button onClick={handleSubmit} variant="contained">
+          <Button onClick={handleSubmit} variant="contained" disabled={loading}>
             {selectedGroup ? 'Update' : 'Create'}
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* Manage Members Dialog */}
-      <Dialog open={membersDialog} onClose={() => setMembersDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          Manage Members - {manageMembersGroup?.name}
-        </DialogTitle>
+      <Dialog open={membersDialog} onClose={handleCloseMembersDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>Manage Members - {manageMembersGroup?.name}</DialogTitle>
         <DialogContent>
           <Box pt={1}>
-            {/* Current Members */}
             <Typography variant="subtitle1" gutterBottom>
               Current Members
             </Typography>
-            <List>
-              {manageMembersGroup?.members?.map((member: any) => (
-                <ListItem key={member.id}>
-                  <ListItemAvatar>
-                    <Avatar>{member.name[0]}</Avatar>
-                  </ListItemAvatar>
-                  <ListItemText primary={member.name} secondary={member.email} />
-                  <ListItemSecondaryAction>
-                    <IconButton 
-                      edge="end" 
-                      onClick={() => handleRemoveMember(manageMembersGroup.id, member.id)}
-                      title="Remove member"
-                    >
-                      <PersonRemove />
-                    </IconButton>
-                  </ListItemSecondaryAction>
-                </ListItem>
-              ))}
-            </List>
+            {membersLoading ? (
+              <Box display="flex" justifyContent="center" py={2}>
+                <CircularProgress size={24} />
+              </Box>
+            ) : (
+              <List>
+                {currentGroupMembers.map((member) => (
+                  <ListItem key={member.id}>
+                    <ListItemAvatar>
+                      <Avatar>
+                        {(member.user.first_name?.[0] || member.user.email?.[0] || '?').toUpperCase()}
+                      </Avatar>
+                    </ListItemAvatar>
+                    <ListItemText
+                      primary={member.user.full_name || `${member.user.first_name} ${member.user.last_name}`}
+                      secondary={`${member.user.email} · ${member.role}`}
+                    />
+                    <ListItemSecondaryAction>
+                      {member.role !== 'admin' && (
+                        <IconButton
+                          edge="end"
+                          onClick={() => handleRemoveMember(manageMembersGroup!.id, member.user.id)}
+                          title="Remove member"
+                        >
+                          <PersonRemove />
+                        </IconButton>
+                      )}
+                    </ListItemSecondaryAction>
+                  </ListItem>
+                ))}
+              </List>
+            )}
 
-            {/* Add New Members */}
             <Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>
               Add New Members
             </Typography>
-            <FormControl fullWidth margin="normal">
-              <InputLabel>Select Members to Add</InputLabel>
-              <Select
-                multiple
-                value={selectedMembers}
-                onChange={handleMemberChange}
-                input={<OutlinedInput label="Select Members to Add" />}
-                renderValue={(selected) => (
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                    {selected.map((value) => {
-                      const member = allMembers.find(m => m.id === value);
-                      return <Chip key={value} label={member?.name} size="small" />;
-                    })}
-                  </Box>
+            <Box display="flex" gap={1} alignItems="flex-start">
+              <Autocomplete
+                fullWidth
+                options={searchedUsers}
+                getOptionLabel={(option) =>
+                  option.full_name || `${option.first_name} ${option.last_name}` || option.email
+                }
+                value={selectedUserToAdd}
+                onChange={(_e, value) => setSelectedUserToAdd(value)}
+                inputValue={userSearchQuery}
+                onInputChange={(_e, value) => handleUserSearch(value)}
+                noOptionsText={userSearchQuery.length < 2 ? 'Type to search...' : 'No users found'}
+                renderInput={(params) => (
+                  <TextField {...params} label="Search users by name or email" size="small" />
                 )}
+                renderOption={(props, option) => (
+                  <li {...props} key={option.id}>
+                    <ListItemAvatar>
+                      <Avatar sx={{ width: 28, height: 28, fontSize: 14 }}>
+                        {(option.first_name?.[0] || option.email?.[0] || '?').toUpperCase()}
+                      </Avatar>
+                    </ListItemAvatar>
+                    <ListItemText
+                      primary={option.full_name || `${option.first_name} ${option.last_name}`}
+                      secondary={option.email}
+                    />
+                  </li>
+                )}
+              />
+              <Button
+                variant="contained"
+                onClick={handleAddMember}
+                disabled={!selectedUserToAdd}
+                sx={{ minWidth: 80, mt: '2px' }}
               >
-                {allMembers
-                  .filter(member => !manageMembersGroup?.members?.some((m: any) => m.id === member.id))
-                  .map((member) => (
-                    <MenuItem key={member.id} value={member.id}>
-                      <Checkbox checked={selectedMembers.indexOf(member.id) > -1} />
-                      <ListItemText primary={member.name} secondary={member.email} />
-                    </MenuItem>
-                  ))}
-              </Select>
-            </FormControl>
+                Add
+              </Button>
+            </Box>
 
-            {/* Invite Link */}
-            <Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>
+            <Typography variant="subtitle1" gutterBottom sx={{ mt: 3 }}>
               Invite Link
             </Typography>
             <TextField
               fullWidth
-              value={inviteLink || `${window.location.origin}/join-group/${manageMembersGroup?.id}`}
+              value={inviteLink || `${window.location.origin}/join-group/${manageMembersGroup?.invite_code}`}
               InputProps={{
                 readOnly: true,
                 endAdornment: (
@@ -494,66 +526,39 @@ const Groups: React.FC = () => {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => { setMembersDialog(false); setSelectedMembers([]); }}>
-            Close
-          </Button>
-          {selectedMembers.length > 0 && (
-            <Button onClick={handleAddMembers} variant="contained">
-              Add Selected Members
-            </Button>
-          )}
+          <Button onClick={handleCloseMembersDialog}>Close</Button>
         </DialogActions>
       </Dialog>
 
       {/* Menu for group actions */}
-      <Menu
-        anchorEl={anchorEl}
-        open={Boolean(anchorEl)}
-        onClose={handleMenuClose}
-      >
+      <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
         <MenuItem onClick={() => handleEditGroup(menuGroupId!)}>
-          <Edit fontSize="small" sx={{ mr: 1 }} />
-          Edit Group
+          <Edit fontSize="small" sx={{ mr: 1 }} /> Edit Group
         </MenuItem>
         <MenuItem onClick={() => handleDeleteGroup(menuGroupId!)}>
-          <Delete fontSize="small" sx={{ mr: 1 }} />
-          Delete Group
+          <Delete fontSize="small" sx={{ mr: 1 }} /> Delete Group
         </MenuItem>
         <MenuItem onClick={() => handleExitGroup(menuGroupId!)}>
-          <ExitToApp fontSize="small" sx={{ mr: 1 }} />
-          Exit Group
+          <ExitToApp fontSize="small" sx={{ mr: 1 }} /> Exit Group
         </MenuItem>
         <MenuItem onClick={() => { handleMenuClose(); handleInvite(menuGroupId!); }}>
-          <Share fontSize="small" sx={{ mr: 1 }} />
-          Share Invite Link
+          <Share fontSize="small" sx={{ mr: 1 }} /> Share Invite Link
         </MenuItem>
       </Menu>
 
-      {/* Floating Action Button for mobile */}
+      {/* FAB for mobile */}
       <Fab
         color="primary"
         aria-label="add"
-        sx={{
-          position: 'fixed',
-          bottom: 16,
-          right: 16,
-          display: { xs: 'flex', md: 'none' },
-        }}
+        sx={{ position: 'fixed', bottom: 16, right: 16, display: { xs: 'flex', md: 'none' } }}
         onClick={handleCreateGroup}
       >
         <Add />
       </Fab>
 
-      {/* Snackbar for notifications */}
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={3000}
-        onClose={() => setSnackbar({ ...snackbar, open: false })}
-      >
-        <Alert 
-          onClose={() => setSnackbar({ ...snackbar, open: false })} 
-          severity={snackbar.severity}
-        >
+      {/* Snackbar */}
+      <Snackbar open={snackbar.open} autoHideDuration={3000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
+        <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity}>
           {snackbar.message}
         </Alert>
       </Snackbar>

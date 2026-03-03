@@ -4,7 +4,7 @@ from django.core.validators import MinValueValidator, FileExtensionValidator
 from django.core.exceptions import ValidationError
 from apps.core.models import TimeStampedModel, UUIDModel, Currency, Category, Tag
 from apps.groups.models import Group, GroupMembership
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
 import uuid
 import os
 
@@ -220,22 +220,25 @@ class Expense(UUIDModel, TimeStampedModel):
             self._create_group_expense_shares()
     
     def _create_group_expense_shares(self):
-        """Create shares for group expenses based on split type"""
-        active_members = self.group.get_active_members()
-        
+        """Create shares for group expenses based on split type."""
+        active_members = list(self.group.get_active_members())
+
         if self.split_type == 'equal':
-            share_amount = (self.amount / len(active_members)).quantize(
-                Decimal('0.01'), rounding=ROUND_HALF_UP
+            count = len(active_members)
+            base_amount = (self.amount / count).quantize(
+                Decimal('0.01'), rounding=ROUND_DOWN
             )
-            
-            for membership in active_members:
+            remainder = self.amount - (base_amount * count)
+
+            for idx, membership in enumerate(active_members):
+                share_amount = base_amount + (remainder if idx == 0 else Decimal('0'))
                 ExpenseShare.objects.get_or_create(
                     expense=self,
                     user=membership.user,
                     defaults={
                         'amount': share_amount,
                         'paid_by': self.paid_by,
-                        'currency': self.currency
+                        'currency': self.currency,
                     }
                 )
         
@@ -341,6 +344,13 @@ class ExpenseShare(UUIDModel, TimeStampedModel):
             models.Index(fields=['user', 'is_settled']),
             models.Index(fields=['paid_by', 'is_settled']),
             models.Index(fields=['expense', 'user']),
+            # Partial index: only unsettled shares — covers the hot path
+            # used by user_balances, group_balances, and settlement views.
+            models.Index(
+                fields=['user_id', 'paid_by_id'],
+                name='idx_shares_unsettled',
+                condition=models.Q(is_settled=False),
+            ),
         ]
     
     def __str__(self):

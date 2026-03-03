@@ -12,8 +12,15 @@ import {
   Chip,
   IconButton,
   Tooltip,
+  Dialog,
+  AppBar,
+  Toolbar,
+  Slide,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
-import { Add, FilterList, Refresh } from '@mui/icons-material';
+import { TransitionProps } from '@mui/material/transitions';
+import { Add, FilterList, Refresh, Close } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { useAppDispatch, useAppSelector } from '../hooks/redux';
@@ -45,10 +52,19 @@ function TabPanel(props: TabPanelProps) {
   );
 }
 
+const SlideUp = React.forwardRef(function SlideUp(
+  props: TransitionProps & { children: React.ReactElement },
+  ref: React.Ref<unknown>,
+) {
+  return <Slide direction="up" ref={ref} {...props} />;
+});
+
 const Expenses: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useAppDispatch();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { currentFilter, setCurrentFilter } = useAppContext();
   const { expenses: storeExpenses, loading, totalExpenses } = useAppSelector((state) => state.expenses);
   const { groups: storeGroups } = useAppSelector((state) => state.groups);
@@ -135,6 +151,35 @@ const Expenses: React.FC = () => {
         return 0;
     }
   };
+
+  if (showAddForm && isMobile) {
+    return (
+      <Dialog
+        fullScreen
+        open={showAddForm}
+        onClose={handleCloseForm}
+        TransitionComponent={SlideUp}
+      >
+        <AppBar sx={{ position: 'sticky', bgcolor: 'background.paper', color: 'text.primary' }}>
+          <Toolbar>
+            <IconButton edge="start" color="inherit" onClick={handleCloseForm} aria-label="close">
+              <Close />
+            </IconButton>
+            <Typography sx={{ ml: 1, flex: 1 }} variant="h6">
+              Add Expense
+            </Typography>
+          </Toolbar>
+        </AppBar>
+        <Box sx={{ p: 2, pb: 4, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <ExpenseForm
+            onClose={handleCloseForm}
+            onSuccess={handleExpenseAdded}
+            groups={groupsList}
+          />
+        </Box>
+      </Dialog>
+    );
+  }
 
   if (showAddForm) {
     return (

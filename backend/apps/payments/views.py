@@ -2,16 +2,21 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from django.conf import settings as django_settings
+from django.db import transaction
 from django.db.models import Sum, Q, F
 from django.utils import timezone
 from decimal import Decimal
 from collections import defaultdict
+import logging
 from .models import Settlement, PaymentMethod, Payment
 from .serializers import SettlementSerializer, PaymentMethodSerializer, PaymentSerializer
 from .debt_simplifier import DebtSimplifier
 from apps.expenses.models import ExpenseShare
 from apps.groups.models import Group
 from apps.core.models import Currency
+
+logger = logging.getLogger(__name__)
 
 
 class SettlementViewSet(viewsets.ModelViewSet):
@@ -32,35 +37,43 @@ class SettlementViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def confirm(self, request, pk=None):
-        """Confirm a settlement"""
-        settlement = self.get_object()
-        user = request.user
-        
-        if user == settlement.payer:
-            settlement.confirm_by_payer()
-        elif user == settlement.payee:
-            settlement.confirm_by_payee()
-        else:
-            return Response(
-                {'detail': 'You are not authorized to confirm this settlement'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        
-        settlement.save()
+        """Confirm a settlement (atomic to prevent double-confirm races)."""
+        with transaction.atomic():
+            settlement = Settlement.objects.select_for_update().get(pk=self.get_object().pk)
+            user = request.user
+
+            if user == settlement.payer:
+                settlement.confirm_by_payer()
+            elif user == settlement.payee:
+                settlement.confirm_by_payee()
+            else:
+                return Response(
+                    {'detail': 'You are not authorized to confirm this settlement'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+            settlement.save()
         return Response(SettlementSerializer(settlement).data)
-    
+
     @action(detail=True, methods=['post'])
     def complete(self, request, pk=None):
-        """Mark settlement as completed"""
-        settlement = self.get_object()
-        
-        if settlement.payer != request.user:
-            return Response(
-                {'detail': 'Only the payer can mark settlement as completed'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        
-        settlement.mark_as_completed()
+        """Mark settlement as completed (atomic to prevent double-complete)."""
+        with transaction.atomic():
+            settlement = Settlement.objects.select_for_update().get(pk=self.get_object().pk)
+
+            if settlement.payer != request.user:
+                return Response(
+                    {'detail': 'Only the payer can mark settlement as completed'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+            if settlement.status == 'completed':
+                return Response(
+                    {'detail': 'This settlement is already completed'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            settlement.mark_as_completed()
         return Response(SettlementSerializer(settlement).data)
     
     @action(detail=True, methods=['post'])
@@ -140,142 +153,110 @@ class PaymentMethodViewSet(viewsets.ModelViewSet):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def user_balances(request):
-    """Get user balances (simplified debts)"""
+    """Get user balances (simplified debts)."""
     user = request.user
     group_id = request.query_params.get('group_id')
-    
+
     from django.contrib.auth import get_user_model
     User = get_user_model()
-    
-    # Get all expense shares where user is involved (unsettled only)
+
     shares_qs = ExpenseShare.objects.filter(
         Q(user=user) | Q(paid_by=user),
-        is_settled=False
+        is_settled=False,
     ).select_related('user', 'paid_by', 'expense')
-    
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.info(f"User {user.id} balance check: Found {shares_qs.count()} unsettled shares")
-    
+
     if group_id:
         shares_qs = shares_qs.filter(expense__group_id=group_id)
-    
-    # Calculate direct totals first (before debt simplification)
+
     total_you_owe = Decimal('0')
     total_owed_to_you = Decimal('0')
-    
-    # Calculate balances per user
     balances = defaultdict(lambda: {'owed': Decimal('0'), 'owes': Decimal('0')})
-    
-    # Debug: track share details
-    share_details = []
-    
+
     for share in shares_qs:
-        share_user_id = share.user_id
-        share_paid_by_id = share.paid_by_id
-        current_user_id = user.id
-        
-        share_info = {
-            'share_id': str(share.id),
-            'user_id': share_user_id,
-            'paid_by_id': share_paid_by_id,
-            'amount': float(share.amount),
-            'expense_title': share.expense.title if share.expense else 'Unknown',
-        }
-        
-        if share_user_id == current_user_id:
-            # This is current user's share
-            if share_paid_by_id != current_user_id:
-                # Someone else paid for user's share - user owes them
-                balances[share_paid_by_id]['owed'] += share.amount
+        if share.user_id == user.id:
+            if share.paid_by_id != user.id:
+                balances[share.paid_by_id]['owed'] += share.amount
                 total_you_owe += share.amount
-                share_info['category'] = 'you_owe'
-            else:
-                share_info['category'] = 'self_paid'
-        elif share_paid_by_id == current_user_id:
-            # User paid for someone else's share - they owe user
-            balances[share_user_id]['owes'] += share.amount
+        elif share.paid_by_id == user.id:
+            balances[share.user_id]['owes'] += share.amount
             total_owed_to_you += share.amount
-            share_info['category'] = 'owed_to_you'
-        else:
-            share_info['category'] = 'not_related'
-        
-        share_details.append(share_info)
-    
-    # Calculate net balances for each user
+
+    # Net balances for debt simplification
     net_balances = {}
     for other_user_id, amounts in balances.items():
         net = amounts['owes'] - amounts['owed']
-        if abs(net) > Decimal('0.01'):  # Only include significant amounts
+        if abs(net) > Decimal('0.01'):
             net_balances[str(other_user_id)] = net
-    
-    # Use advanced debt simplification for optimized transactions
+
     simplified_transactions = DebtSimplifier.minimize_transactions(net_balances)
-    
-    # Build the raw per-user balances (what the user actually sees)
+
+    # Batch-fetch all referenced users in one query (eliminates N+1)
+    all_user_ids = set(balances.keys())
+    for txn in simplified_transactions:
+        all_user_ids.add(txn['from'])
+        all_user_ids.add(txn['to'])
+    users_map = {
+        str(u.id): u
+        for u in User.objects.filter(id__in=all_user_ids)
+    } if all_user_ids else {}
+
     raw_balances = []
     for other_user_id, amounts in balances.items():
-        try:
-            other_user = User.objects.get(id=other_user_id)
-            user_name = other_user.get_full_name() or other_user.username
-            
-            # User owes this person
-            if amounts['owed'] > Decimal('0.01'):
-                raw_balances.append({
-                    'user_id': str(other_user_id),
-                    'user_name': user_name,
-                    'amount': float(amounts['owed']),
-                    'currency': 'USD',
-                    'you_owe': True,
-                    'owes_you': False
-                })
-            
-            # This person owes the user
-            if amounts['owes'] > Decimal('0.01'):
-                raw_balances.append({
-                    'user_id': str(other_user_id),
-                    'user_name': user_name,
-                    'amount': float(amounts['owes']),
-                    'currency': 'USD',
-                    'you_owe': False,
-                    'owes_you': True
-                })
-        except User.DoesNotExist:
+        other_user = users_map.get(str(other_user_id))
+        if not other_user:
             continue
-    
-    # Also include simplified transactions for reference (optimized payment plan)
+        user_name = other_user.get_full_name() or other_user.username
+
+        if amounts['owed'] > Decimal('0.01'):
+            raw_balances.append({
+                'user_id': str(other_user_id),
+                'user_name': user_name,
+                'amount': float(amounts['owed']),
+                'currency': 'USD',
+                'you_owe': True,
+                'owes_you': False,
+            })
+        if amounts['owes'] > Decimal('0.01'):
+            raw_balances.append({
+                'user_id': str(other_user_id),
+                'user_name': user_name,
+                'amount': float(amounts['owes']),
+                'currency': 'USD',
+                'you_owe': False,
+                'owes_you': True,
+            })
+
     transactions_with_names = []
     for txn in simplified_transactions:
-        try:
-            from_user = User.objects.get(id=txn['from'])
-            to_user = User.objects.get(id=txn['to'])
-            transactions_with_names.append({
-                'from_user_id': txn['from'],
-                'from_user_name': from_user.get_full_name() or from_user.username,
-                'to_user_id': txn['to'],
-                'to_user_name': to_user.get_full_name() or to_user.username,
-                'amount': float(txn['amount']),
-                'currency': 'USD'
-            })
-        except User.DoesNotExist:
+        from_user = users_map.get(str(txn['from']))
+        to_user = users_map.get(str(txn['to']))
+        if not from_user or not to_user:
             continue
-    
-    # Return both the direct totals AND the raw balances
-    return Response({
+        transactions_with_names.append({
+            'from_user_id': txn['from'],
+            'from_user_name': from_user.get_full_name() or from_user.username,
+            'to_user_id': txn['to'],
+            'to_user_name': to_user.get_full_name() or to_user.username,
+            'amount': float(txn['amount']),
+            'currency': 'USD',
+        })
+
+    response_data = {
         'balances': raw_balances,
         'simplified_transactions': transactions_with_names,
         'total_owed': float(total_you_owe),
         'total_owed_to_you': float(total_owed_to_you),
-        # Include debug info (can be removed in production)
-        'debug_info': {
+    }
+
+    # Debug info strictly gated behind DEBUG — never shipped to production
+    if django_settings.DEBUG:
+        response_data['debug_info'] = {
             'user_id': user.id,
-            'shares_count': len(share_details),
-            'raw_you_owe': float(total_you_owe),
-            'raw_owed_to_you': float(total_owed_to_you),
+            'shares_count': shares_qs.count(),
             'net_balances': {k: float(v) for k, v in net_balances.items()},
-            'share_details': share_details[:10],  # Limit to first 10 for debugging
         }
-    })
+
+    return Response(response_data)
 
 
 @api_view(['GET'])
@@ -547,55 +528,61 @@ def expense_settlements(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def settle_expense_share(request, share_id):
-    """Mark an expense share as settled"""
+    """Mark an expense share as settled.
+
+    Uses select_for_update() inside an atomic block to prevent the TOCTOU
+    double-settle race condition where two concurrent requests both read
+    is_settled=False and both succeed.
+    """
     user = request.user
-    payment_method = request.data.get('payment_method', 'cash')
-    note = request.data.get('note', '')
-    
-    try:
-        share = ExpenseShare.objects.get(id=share_id)
-    except ExpenseShare.DoesNotExist:
-        return Response(
-            {'detail': 'Expense share not found'},
-            status=status.HTTP_404_NOT_FOUND
-        )
-    
-    # Check if user is involved in this share
-    if user.id not in [share.user_id, share.paid_by_id]:
-        return Response(
-            {'detail': 'You are not authorized to settle this expense'},
-            status=status.HTTP_403_FORBIDDEN
-        )
-    
-    if share.is_settled:
-        return Response(
-            {'detail': 'This expense is already settled'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-    
-    # Mark as settled
-    share.is_settled = True
-    share.settled_at = timezone.now()
-    share.save()
-    
-    # Send notification
-    from apps.notifications.services import NotificationService
-    other_user = share.paid_by if share.user_id == user.id else share.user
-    NotificationService.create_notification(
-        user=other_user,
-        notification_type='settlement_completed',
-        title='Payment Settled',
-        message=f'{user.get_full_name() or user.username} marked ${share.amount} as settled for "{share.expense.title}"',
-        sender=user,
-        related_object_type='expense_share',
-        related_object_id=share.id,
-        action_url='/settlements',
-        metadata={
-            'share_id': str(share.id),
-            'expense_id': str(share.expense.id) if share.expense else None,
-        }
+
+    # Scope the lookup to shares the requesting user is party to.
+    # This also prevents information-disclosure (no 403-vs-404 distinction).
+    share_qs = ExpenseShare.objects.filter(
+        Q(user=user) | Q(paid_by=user),
+        id=share_id,
     )
-    
+
+    with transaction.atomic():
+        try:
+            share = share_qs.select_for_update().get()
+        except ExpenseShare.DoesNotExist:
+            return Response(
+                {'detail': 'Expense share not found'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if share.is_settled:
+            return Response(
+                {'detail': 'This expense is already settled'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        share.is_settled = True
+        share.settled_at = timezone.now()
+        share.save(update_fields=['is_settled', 'settled_at'])
+
+    # Notification sent outside the transaction to keep the lock window narrow
+    try:
+        from apps.notifications.services import NotificationService
+        other_user = share.paid_by if share.user_id == user.id else share.user
+        NotificationService.create_notification(
+            user=other_user,
+            notification_type='settlement_completed',
+            title='Payment Settled',
+            message=f'{user.get_full_name() or user.username} marked ${share.amount} as settled for "{share.expense.title}"',
+            sender=user,
+            related_object_type='expense_share',
+            related_object_id=share.id,
+            action_url='/settlements',
+            metadata={
+                'share_id': str(share.id),
+                'expense_id': str(share.expense.id) if share.expense else None,
+            },
+        )
+    except Exception:
+        logger.exception("Failed to send settlement notification for share %s", share_id)
+
     return Response({
         'detail': 'Expense settled successfully',
         'share_id': str(share.id),

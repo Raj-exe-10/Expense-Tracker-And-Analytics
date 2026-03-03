@@ -46,6 +46,13 @@ class Command(BaseCommand):
                     self.style.WARNING(f'Category already exists: {category.name}')
                 )
 
+        # Invalidate server-side cache so the list view picks up new data
+        try:
+            from django.core.cache import cache
+            cache.delete('categories_all')
+        except Exception:
+            pass
+
         self.stdout.write(
             self.style.SUCCESS(f'\nSuccessfully seeded {created_count} categories')
         )

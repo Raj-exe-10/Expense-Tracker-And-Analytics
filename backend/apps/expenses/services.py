@@ -2,6 +2,8 @@
 Expense service layer: share creation, group totals, notifications.
 """
 import logging
+from decimal import Decimal, ROUND_DOWN
+
 from django.contrib.auth import get_user_model
 
 from .models import Expense, ExpenseShare
@@ -16,15 +18,23 @@ class ExpenseService:
 
     @staticmethod
     def create_equal_shares(expense: Expense) -> None:
-        """Create equal shares for all active group members."""
+        """Create equal shares for all active group members.
+
+        Uses ROUND_DOWN per share and assigns the residual cents to the first
+        member so that the share amounts always sum exactly to expense.amount.
+        """
         if not expense.group:
             return
-        group_memberships = expense.group.memberships.filter(is_active=True)
-        member_count = group_memberships.count()
-        if member_count == 0:
+        memberships = list(expense.group.memberships.filter(is_active=True))
+        count = len(memberships)
+        if count == 0:
             return
-        share_amount = expense.amount / member_count
-        for membership in group_memberships:
+
+        base_amount = (expense.amount / count).quantize(Decimal('0.01'), rounding=ROUND_DOWN)
+        remainder = expense.amount - (base_amount * count)
+
+        for idx, membership in enumerate(memberships):
+            share_amount = base_amount + (remainder if idx == 0 else Decimal('0'))
             ExpenseShare.objects.get_or_create(
                 expense=expense,
                 user=membership.user,

@@ -22,6 +22,7 @@ interface AuthState {
   token: string | null;
   refreshToken: string | null;
   isLoading: boolean;
+  isInitialized: boolean;
   error: string | { detail?: string; message?: string } | null;
   isAuthenticated: boolean;
 }
@@ -31,6 +32,7 @@ const initialState: AuthState = {
   token: tokenStorage.getAccessToken(),
   refreshToken: tokenStorage.getRefreshToken(),
   isLoading: false,
+  isInitialized: false,
   error: null,
   isAuthenticated: false,
 };
@@ -172,8 +174,8 @@ const authSlice = createSlice({
     setTokens: (state, action: PayloadAction<{ access: string; refresh: string }>) => {
       state.token = action.payload.access;
       state.refreshToken = action.payload.refresh;
-      localStorage.setItem('access_token', action.payload.access);
-      localStorage.setItem('refresh_token', action.payload.refresh);
+      tokenStorage.setAccessToken(action.payload.access);
+      tokenStorage.setRefreshToken(action.payload.refresh);
     },
   },
   extraReducers: (builder) => {
@@ -264,19 +266,21 @@ const authSlice = createSlice({
         state.refreshToken = null;
         tokenStorage.clearTokens();
       })
-      // Check auth status
+      // Check auth status (initial app load)
       .addCase(checkAuthStatus.pending, (state) => {
         state.isLoading = true;
       })
       .addCase(checkAuthStatus.fulfilled, (state, action) => {
         state.isLoading = false;
+        state.isInitialized = true;
         state.user = action.payload;
         state.isAuthenticated = true;
-        state.token = localStorage.getItem('access_token');
-        state.refreshToken = localStorage.getItem('refresh_token');
+        state.token = tokenStorage.getAccessToken();
+        state.refreshToken = tokenStorage.getRefreshToken();
       })
       .addCase(checkAuthStatus.rejected, (state) => {
         state.isLoading = false;
+        state.isInitialized = true;
         state.isAuthenticated = false;
         state.token = null;
         state.refreshToken = null;

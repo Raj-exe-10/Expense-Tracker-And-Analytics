@@ -44,6 +44,13 @@ class Command(BaseCommand):
                     self.style.WARNING(f'Currency already exists: {currency.name} ({currency.code})')
                 )
 
+        # Invalidate server-side cache so the list view picks up new data
+        try:
+            from django.core.cache import cache
+            cache.delete('currencies_active')
+        except Exception:
+            pass
+
         self.stdout.write(
             self.style.SUCCESS(f'\nSuccessfully seeded {created_count} currencies')
         )

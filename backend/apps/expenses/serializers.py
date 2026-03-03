@@ -75,6 +75,40 @@ class CurrencySimpleSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class SimpleExpenseSerializer(serializers.ModelSerializer):
+    """Lightweight serializer for list endpoints — excludes nested shares,
+    comments, and heavy related objects to keep the payload small."""
+
+    paid_by = UserSimpleSerializer(read_only=True)
+    category = CategorySerializer(read_only=True)
+    group = GroupSimpleSerializer(read_only=True)
+    currency = CurrencySimpleSerializer(read_only=True)
+    comments_count = serializers.SerializerMethodField()
+    total_shares = serializers.SerializerMethodField()
+    date = serializers.DateField(source='expense_date', read_only=True)
+
+    class Meta:
+        model = Expense
+        fields = [
+            'id', 'title', 'amount', 'currency', 'expense_date', 'date',
+            'category', 'group', 'paid_by', 'is_settled',
+            'comments_count', 'total_shares', 'created_at', 'updated_at',
+        ]
+        read_only_fields = fields
+
+    def get_comments_count(self, obj):
+        return obj.comments.count()
+
+    def get_total_shares(self, obj):
+        return obj.shares.count()
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        if 'amount' in ret and ret['amount'] is not None:
+            ret['amount'] = float(ret['amount'])
+        return ret
+
+
 class ExpenseSerializer(serializers.ModelSerializer):
     paid_by = UserSimpleSerializer(read_only=True)
     paid_by_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)  # Write field for paid_by
