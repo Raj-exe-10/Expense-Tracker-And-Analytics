@@ -349,3 +349,57 @@ class PaymentWebhook(UUIDModel, TimeStampedModel):
     
     def __str__(self):
         return f"{self.service} webhook: {self.event_type}"
+
+
+class PaymentRequest(UUIDModel, TimeStampedModel):
+    """User-reported payment awaiting payee approval."""
+    REQUEST_STATUS = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('disputed', 'Disputed'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    requester = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='payment_requests_sent',
+    )
+    payee = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='payment_requests_received',
+    )
+    group = models.ForeignKey(
+        Group,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='payment_requests',
+    )
+    amount = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
+    )
+    currency = models.ForeignKey(
+        Currency,
+        on_delete=models.PROTECT,
+        related_name='payment_requests',
+    )
+    note = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=REQUEST_STATUS, default='pending')
+    settlement = models.ForeignKey(
+        Settlement,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='payment_requests',
+    )
+
+    class Meta:
+        db_table = 'payment_requests'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.requester} → {self.payee}: {self.amount} ({self.status})"

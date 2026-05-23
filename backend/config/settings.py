@@ -69,6 +69,7 @@ INSTALLED_APPS = [
     'apps.analytics',
     'apps.notifications',
     'apps.budget',
+    'apps.enterprise',
 ]
 
 MIDDLEWARE = [
@@ -199,14 +200,22 @@ REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_THROTTLE_CLASSES': [
         'rest_framework.throttling.AnonRateThrottle',
-        'rest_framework.throttling.UserRateThrottle'
+        'rest_framework.throttling.UserRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
         'anon': '100/hour',
-        'user': '1000/hour'
+        'user': '1000/hour',
     },
     'EXCEPTION_HANDLER': 'apps.core.exceptions.custom_exception_handler',  # Custom exception handler
 }
+
+# Local dev: disable API throttling (avoids 429 loops when the SPA fires many parallel requests)
+if DEBUG:
+    REST_FRAMEWORK['DEFAULT_THROTTLE_CLASSES'] = []
+    REST_FRAMEWORK['DEFAULT_THROTTLE_RATES'] = {
+        'anon': '10000/minute',
+        'user': '10000/minute',
+    }
 
 # ============================================================================
 # JWT CONFIGURATION

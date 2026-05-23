@@ -92,6 +92,8 @@ class ExpenseViewSet(ExpenseFilterMixin, viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         expense = serializer.save()
+        expense.version = (expense.version or 1) + 1
+        expense.save(update_fields=['version'])
         ExpenseService.after_update(expense, self.request.user)
 
     def perform_destroy(self, instance):

@@ -14,6 +14,7 @@ export interface User {
   is_verified: boolean;
   is_premium: boolean;
   preferred_currency: string;
+  monthly_income?: number | null;
   timezone: string;
 }
 
@@ -159,7 +160,14 @@ export const fetchUser = createAsyncThunk(
       const response = await authAPI.getProfile();
       return response;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Failed to fetch user');
+      const status = error.response?.status;
+      if (status === 401 || status === 403) {
+        tokenStorage.clearTokens();
+      }
+      return rejectWithValue({
+        message: error.response?.data?.detail || 'Failed to fetch user',
+        status,
+      });
     }
   }
 );
@@ -258,13 +266,15 @@ const authSlice = createSlice({
         state.user = action.payload;
         state.isAuthenticated = true;
       })
-      .addCase(fetchUser.rejected, (state) => {
+      .addCase(fetchUser.rejected, (state, action) => {
         state.isLoading = false;
-        state.isAuthenticated = false;
-        // Clear tokens if user fetch fails
-        state.token = null;
-        state.refreshToken = null;
-        tokenStorage.clearTokens();
+        const status = (action.payload as { status?: number } | undefined)?.status;
+        if (status === 401 || status === 403) {
+          state.isAuthenticated = false;
+          state.token = null;
+          state.refreshToken = null;
+          tokenStorage.clearTokens();
+        }
       })
       // Check auth status (initial app load)
       .addCase(checkAuthStatus.pending, (state) => {
@@ -278,13 +288,20 @@ const authSlice = createSlice({
         state.token = tokenStorage.getAccessToken();
         state.refreshToken = tokenStorage.getRefreshToken();
       })
-      .addCase(checkAuthStatus.rejected, (state) => {
+      .addCase(checkAuthStatus.rejected, (state, action) => {
         state.isLoading = false;
         state.isInitialized = true;
-        state.isAuthenticated = false;
-        state.token = null;
-        state.refreshToken = null;
-        state.user = null;
+        const status = (action.payload as { status?: number } | undefined)?.status;
+        if (status === 401 || status === 403 || !tokenStorage.getAccessToken()) {
+          state.isAuthenticated = false;
+          state.token = null;
+          state.refreshToken = null;
+          state.user = null;
+        } else {
+          state.isAuthenticated = !!tokenStorage.getAccessToken();
+          state.token = tokenStorage.getAccessToken();
+          state.refreshToken = tokenStorage.getRefreshToken();
+        }
       });
   },
 });
@@ -303,9 +320,15 @@ export const checkAuthStatus = createAsyncThunk(
       const response = await authAPI.getProfile();
       return response;
     } catch (error: any) {
-      // Clear invalid tokens
-      tokenStorage.clearTokens();
-      return rejectWithValue(error.response?.data?.message || 'Authentication failed');
+      const status = error.response?.status;
+      // Only clear session on auth failures — not rate limits or server errors
+      if (status === 401 || status === 403) {
+        tokenStorage.clearTokens();
+      }
+      return rejectWithValue({
+        message: error.response?.data?.message || 'Authentication failed',
+        status,
+      });
     }
   }
 );

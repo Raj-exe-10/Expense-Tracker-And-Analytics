@@ -87,7 +87,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister }) => {
       })).unwrap();
       
       // Redirect to dashboard on successful login
-      navigate('/dashboard');
+      navigate('/app/home');
     } catch (error: any) {
       // Error is already handled by the slice and displayed in the error state
       // Log for debugging
@@ -105,10 +105,10 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister }) => {
       <CardContent sx={{ p: 4 }}>
         <Box textAlign="center" mb={3}>
           <Typography variant="h4" component="h1" gutterBottom>
-            Welcome Back
+            Sign in
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Sign in to your account to continue
+            LedgerCore — access your financial clarity
           </Typography>
         </Box>
 
@@ -204,23 +204,11 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister }) => {
           </Divider>
 
           <Box display="flex" gap={2} mb={2}>
-            <Button
-              fullWidth
-              variant="outlined"
-              startIcon={<Google />}
-              onClick={() => handleSocialLogin('google')}
-              disabled={loading}
-            >
+            <Button fullWidth variant="outlined" startIcon={<Google />} disabled title="Coming soon">
               Google
             </Button>
-            <Button
-              fullWidth
-              variant="outlined"
-              startIcon={<Facebook />}
-              onClick={() => handleSocialLogin('facebook')}
-              disabled={loading}
-            >
-              Facebook
+            <Button fullWidth variant="outlined" startIcon={<Facebook />} disabled title="Coming soon">
+              Apple
             </Button>
           </Box>
 

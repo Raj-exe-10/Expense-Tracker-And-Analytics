@@ -44,6 +44,7 @@ import {
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
+import { paths } from '../../routes/paths';
 import { useAppSelector, useAppDispatch } from '../../hooks/redux';
 import { fetchExpenses, deleteExpense } from '../../store/slices/expenseSlice';
 import { fetchCategories } from '../../store/slices/coreSlice';
@@ -100,7 +101,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ groupId, currentGroupFilter, 
     if (currentGroupFilter) setGroupFilter(currentGroupFilter);
   }, [currentGroupFilter]);
 
-  // Build flat query params for backend (backend expects top-level params; omit undefined/empty)
+  // Build flat query params for backend (debounced to avoid rate-limit storms while typing)
   useEffect(() => {
     const params: Record<string, string> = {};
     const effectiveGroupId = groupId || currentGroupFilter || (groupFilter !== 'all' ? groupFilter : undefined);
@@ -111,7 +112,11 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ groupId, currentGroupFilter, 
     if (statusFilter === 'settled') params.is_settled = 'true';
     if (statusFilter === 'pending') params.is_settled = 'false';
 
-    dispatch(fetchExpenses(params));
+    const timer = window.setTimeout(() => {
+      dispatch(fetchExpenses(params));
+    }, search ? 400 : 0);
+
+    return () => window.clearTimeout(timer);
   }, [dispatch, groupId, currentGroupFilter, searchTerm, categoryFilter, statusFilter, groupFilter]);
 
   const handleChangePage = (event: unknown, newPage: number) => {
@@ -135,7 +140,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ groupId, currentGroupFilter, 
 
   const handleEdit = () => {
     if (selectedExpense) {
-      navigate(`/expenses/${selectedExpense.id}/edit`);
+      navigate(paths.expenseEdit(selectedExpense.id));
     }
     handleMenuClose();
   };
@@ -149,27 +154,27 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ groupId, currentGroupFilter, 
 
   const handleDuplicate = () => {
     if (selectedExpense) {
-      navigate('/expenses/add', { state: { duplicate: selectedExpense } });
+      navigate(paths.addExpense, { state: { duplicate: selectedExpense } });
     }
     handleMenuClose();
   };
 
   const handleSplit = () => {
     if (selectedExpense) {
-      navigate(`/expenses/${selectedExpense.id}/split`);
+      navigate(paths.expenseEdit(selectedExpense.id));
     }
     handleMenuClose();
   };
 
   const handleComments = () => {
     if (selectedExpense) {
-      navigate(`/expenses/${selectedExpense.id}/comments`);
+      navigate(paths.expenseDetail(selectedExpense.id), { state: { openComments: true } });
     }
     handleMenuClose();
   };
 
   const handleRowClick = (expense: any) => {
-    navigate(`/expenses/${expense.id}`);
+    navigate(paths.expenseDetail(expense.id));
   };
 
   // Sort expenses

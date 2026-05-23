@@ -63,6 +63,9 @@ class OfflineService {
   }
   
   private async registerServiceWorker() {
+    if (process.env.NODE_ENV !== 'production') {
+      return;
+    }
     if ('serviceWorker' in navigator) {
       try {
         const registration = await navigator.serviceWorker.register('/service-worker.js');
@@ -273,22 +276,51 @@ class OfflineService {
     if (!this.isOnline) return;
     
     try {
-      // Sync pending expenses
       const pendingExpenses = await this.getPendingExpenses();
-      
+      const base = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+      const token = pendingExpenses[0]?.token || localStorage.getItem('access_token') || '';
+
+      const items = pendingExpenses.map((expense: any) => ({
+        id: expense.server_id,
+        base_version: expense.base_version,
+        data: expense.data || expense,
+      }));
+
+      if (items.length > 0) {
+        const response = await fetch(`${base}/api/expenses/sync/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ items }),
+        });
+        if (response.ok) {
+          const result = await response.json();
+          if (result.conflicts?.length) {
+            window.dispatchEvent(
+              new CustomEvent('ledgercore:sync-conflict', { detail: { conflicts: result.conflicts } })
+            );
+          }
+          for (const id of result.applied || []) {
+            const pending = pendingExpenses.find((e: any) => e.server_id === id || !e.server_id);
+            if (pending) await this.removePendingExpense(pending.id);
+          }
+        }
+      }
+
       for (const expense of pendingExpenses) {
+        if (expense.synced) continue;
         try {
-          const response = await fetch('/api/expenses/expenses/', {
+          const response = await fetch(`${base}/api/expenses/expenses/`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${expense.token}`
+              Authorization: `Bearer ${expense.token || token}`,
             },
-            body: JSON.stringify(expense)
+            body: JSON.stringify(expense.data || expense),
           });
-          
           if (response.ok) {
-            // Remove from pending queue
             await this.removePendingExpense(expense.id);
           }
         } catch (error) {

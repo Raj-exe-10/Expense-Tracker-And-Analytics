@@ -59,6 +59,7 @@ import { fetchGroups } from '../store/slices/groupSlice';
 import ExpenseForm from '../components/expenses/ExpenseForm';
 import { expensesAPI } from '../services/api';
 import { formatAmount } from '../utils/formatting';
+import { paths } from '../routes/paths';
 
 const ExpenseDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -90,6 +91,14 @@ const ExpenseDetail: React.FC = () => {
     };
   }, [id, dispatch]);
 
+  useEffect(() => {
+    const state = location.state as { openComments?: boolean } | null;
+    if (state?.openComments) {
+      setCommentDialogOpen(true);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.pathname, location.state, navigate]);
+
   const loadComments = async () => {
     if (id) {
       try {
@@ -108,7 +117,9 @@ const ExpenseDetail: React.FC = () => {
 
   const handleCancelEdit = () => {
     setEditMode(false);
-    if (id) {
+    if (location.pathname.includes('/edit') && id) {
+      navigate(paths.expenseDetail(id), { replace: true });
+    } else if (id) {
       dispatch(fetchExpenseById(id));
     }
   };
@@ -117,7 +128,9 @@ const ExpenseDetail: React.FC = () => {
     if (id) {
       await dispatch(updateExpense({ id, data: expenseData }));
       setEditMode(false);
-      if (id) {
+      if (location.pathname.includes('/edit')) {
+        navigate(paths.expenseDetail(id), { replace: true });
+      } else {
         dispatch(fetchExpenseById(id));
       }
     }
@@ -127,13 +140,13 @@ const ExpenseDetail: React.FC = () => {
     if (id) {
       await dispatch(deleteExpense(id));
       setDeleteDialogOpen(false);
-      navigate('/expenses');
+      navigate(paths.expenses);
     }
   };
 
   const handleDuplicate = () => {
     if (currentExpense) {
-      navigate('/expenses/add', { state: { duplicate: currentExpense } });
+      navigate(paths.addExpense, { state: { duplicate: currentExpense } });
     }
     setMenuAnchor(null);
   };
@@ -179,7 +192,7 @@ const ExpenseDetail: React.FC = () => {
   if (error && !currentExpense) {
     return (
       <Box>
-        <Button startIcon={<ArrowBack />} onClick={() => navigate('/expenses')} sx={{ mb: 2 }}>
+        <Button startIcon={<ArrowBack />} onClick={() => navigate(paths.expenses)} sx={{ mb: 2 }}>
           Back to Expenses
         </Button>
         <Alert severity="error">{error}</Alert>
@@ -228,7 +241,7 @@ const ExpenseDetail: React.FC = () => {
       {/* Header */}
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Box display="flex" alignItems="center" gap={2}>
-          <IconButton onClick={() => navigate('/expenses')}>
+          <IconButton onClick={() => navigate(paths.expenses)}>
             <ArrowBack />
           </IconButton>
           <Typography variant="h4">Expense Details</Typography>

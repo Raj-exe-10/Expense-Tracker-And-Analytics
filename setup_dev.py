@@ -153,9 +153,9 @@ def create_env_file():
 
 def run_migrations():
     heading("Django migrations")
-    step("Running migrate --run-syncdb ...")
+    step("Running migrate (all apps) ...")
     run(
-        [str(VENV_PYTHON), "manage.py", "migrate", "--run-syncdb"],
+        [str(VENV_PYTHON), "manage.py", "migrate"],
         cwd=BACKEND_DIR,
     )
     print("  Migrations applied.")
@@ -181,6 +181,13 @@ def seed_data():
     step("Creating test users ...")
     run(
         [str(VENV_PYTHON), "manage.py", "create_test_users"],
+        cwd=BACKEND_DIR,
+        check=False,
+    )
+
+    step("Seeding ML analytics demo data ...")
+    run(
+        [str(VENV_PYTHON), "manage.py", "seed_ml_analytics_data", "--force"],
         cwd=BACKEND_DIR,
         check=False,
     )

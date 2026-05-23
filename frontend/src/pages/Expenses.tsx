@@ -5,7 +5,6 @@ import {
   Typography,
   Tabs,
   Tab,
-  Fab,
   Alert,
   Snackbar,
   Paper,
@@ -16,15 +15,15 @@ import {
   AppBar,
   Toolbar,
   Slide,
-  useTheme,
-  useMediaQuery,
 } from '@mui/material';
+import { useIsMobileLayout } from '../layout/useIsMobileLayout';
 import { TransitionProps } from '@mui/material/transitions';
 import { Add, FilterList, Refresh, Close } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { useAppDispatch, useAppSelector } from '../hooks/redux';
 import { fetchExpenses } from '../store/slices/expenseSlice';
+import { invalidatePostGame } from '../store/slices/postGameAnalyticsSlice';
 import { fetchGroups } from '../store/slices/groupSlice';
 import ExpenseList from '../components/expenses/ExpenseList';
 import ExpenseForm from '../components/expenses/ExpenseForm';
@@ -63,8 +62,7 @@ const Expenses: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useAppDispatch();
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isMobile = useIsMobileLayout();
   const { currentFilter, setCurrentFilter } = useAppContext();
   const { expenses: storeExpenses, loading, totalExpenses } = useAppSelector((state) => state.expenses);
   const { groups: storeGroups } = useAppSelector((state) => state.groups);
@@ -108,6 +106,7 @@ const Expenses: React.FC = () => {
     setShowAddForm(false);
     setSuccessMessage('Expense added successfully!');
     dispatch(fetchExpenses({}));
+    dispatch(invalidatePostGame());
   };
 
   const handleRefresh = () => {
@@ -271,7 +270,7 @@ const Expenses: React.FC = () => {
           value={tabValue} 
           onChange={handleTabChange} 
           aria-label="expense tabs"
-          variant="fullWidth"
+          variant={isMobile ? 'fullWidth' : 'standard'}
           sx={{
             '& .MuiTab-root': {
               textTransform: 'none',
@@ -345,20 +344,6 @@ const Expenses: React.FC = () => {
         </Paper>
       )}
 
-      {/* Floating Action Button for mobile */}
-      <Fab
-        color="primary"
-        aria-label="add"
-        sx={{
-          position: 'fixed',
-          bottom: 24,
-          right: 24,
-          display: { xs: 'flex', md: 'none' },
-        }}
-        onClick={handleAddExpense}
-      >
-        <Add />
-      </Fab>
     </Box>
   );
 };

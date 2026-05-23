@@ -31,6 +31,11 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
+    // Do not retry or redirect on rate limit — avoids auth logout loops
+    if (error.response?.status === 429) {
+      return Promise.reject(error);
+    }
+
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
@@ -289,6 +294,20 @@ export const budgetAPI = {
 
   getBudgetCategories: (walletId?: string) =>
     api.get('/budget/categories/', { params: walletId ? { wallet_id: walletId } : {} }).then(res => res.data),
+
+  getSavingsGoals: () =>
+    api.get('/budget/savings-goals/').then(res => res.data),
+  createSavingsGoal: (data: {
+    name: string;
+    target_amount: number;
+    current_amount?: number;
+    target_date?: string;
+    currency?: string;
+  }) => api.post('/budget/savings-goals/', data).then(res => res.data),
+  updateSavingsGoal: (id: string, data: any) =>
+    api.patch(`/budget/savings-goals/${id}/`, data).then(res => res.data),
+  deleteSavingsGoal: (id: string) =>
+    api.delete(`/budget/savings-goals/${id}/`).then(res => res.data),
 };
 
 // Settlements API
@@ -373,6 +392,8 @@ export const notificationsAPI = {
 export const dashboardAPI = {
   getSummary: () =>
     api.get('/dashboard/').then(res => res.data),
+  getHome: () =>
+    api.get('/dashboard/home/').then(res => res.data),
 };
 
 // Analytics API
@@ -389,6 +410,14 @@ export const analyticsAPI = {
   getGroupAnalytics: (groupId: string, params?: any) =>
     api.get(`/analytics/groups/${groupId}/analytics/`, { params }).then(res => res.data),
   
+  getSpendingFlow: (params?: any) =>
+    api.get('/analytics/flow/', { params }).then(res => res.data),
+  getSpendingIntensity: (params?: any) =>
+    api.get('/analytics/spending-intensity/', { params }).then(res => res.data),
+  getInsights: (params?: any) =>
+    api.get('/analytics/insights/', { params }).then(res => res.data),
+  getPostGame: (params?: { year?: number; month?: number; scope?: string }) =>
+    api.get('/analytics/post-game/', { params }).then(res => res.data),
   exportData: (format: 'csv' | 'pdf', params?: any) => {
     const config: any = { params };
     // Set responseType based on format
@@ -401,6 +430,59 @@ export const analyticsAPI = {
     }
     return api.get(`/analytics/export/${format}/`, config).then(res => res.data);
   },
+};
+
+export const fixedCostsAPI = {
+  list: () => api.get('/budget/fixed-costs/').then(res => res.data),
+  create: (data: any) => api.post('/budget/fixed-costs/', data).then(res => res.data),
+  update: (id: string, data: any) => api.patch(`/budget/fixed-costs/${id}/`, data).then(res => res.data),
+  delete: (id: string) => api.delete(`/budget/fixed-costs/${id}/`).then(res => res.data),
+  upcoming: () => api.get('/budget/fixed-costs/upcoming/').then(res => res.data),
+};
+
+export const paymentRequestsAPI = {
+  list: () => api.get('/payments/payment-requests/').then(res => res.data),
+  create: (data: any) => api.post('/payments/payment-requests/', data).then(res => res.data),
+  pendingForMe: () => api.get('/payments/payment-requests/pending_for_me/').then(res => res.data),
+  approve: (id: string) => api.post(`/payments/payment-requests/${id}/approve/`).then(res => res.data),
+  dispute: (id: string) => api.post(`/payments/payment-requests/${id}/dispute/`).then(res => res.data),
+};
+
+export const settlementReportsAPI = {
+  get: () => api.get('/payments/settlement-reports/').then(res => res.data),
+};
+
+export const securityAPI = {
+  get: () => api.get('/auth/security/').then(res => res.data),
+  patch: (data: any) => api.patch('/auth/security/', data).then(res => res.data),
+  totpSetup: () => api.post('/auth/security/totp/setup/').then(res => res.data),
+  totpVerify: (code: string) => api.post('/auth/security/totp/verify/', { code }).then(res => res.data),
+  setAppLockPin: (pin: string, use_biometric?: boolean) =>
+    api.post('/auth/security/app-lock/', { pin, use_biometric }).then(res => res.data),
+  deleteAccount: () => api.post('/auth/security/delete-account/').then(res => res.data),
+};
+
+export const enterpriseAPI = {
+  entities: {
+    list: (params?: any) => api.get('/enterprise/entities/', { params }).then(res => res.data),
+    create: (data: any) => api.post('/enterprise/entities/', data).then(res => res.data),
+    update: (id: string, data: any) => api.patch(`/enterprise/entities/${id}/`, data).then(res => res.data),
+    delete: (id: string) => api.delete(`/enterprise/entities/${id}/`).then(res => res.data),
+  },
+  audit: {
+    list: (params?: any) => api.get('/enterprise/audit/', { params }).then(res => res.data),
+  },
+  exports: {
+    list: () => api.get('/enterprise/exports/').then(res => res.data),
+    create: (data: any) => api.post('/enterprise/exports/', data).then(res => res.data),
+    download: (id: string) =>
+      api.get(`/enterprise/exports/${id}/download/`, { responseType: 'blob' }).then(res => res.data),
+  },
+};
+
+export const syncAPI = {
+  sync: (items: any[]) => api.post('/expenses/sync/', { items }).then(res => res.data),
+  resolve: (data: any) => api.post('/expenses/sync/resolve/', data).then(res => res.data),
 };
 
 export default api;

@@ -3,6 +3,7 @@ import authReducer from './slices/authSlice';
 import expenseReducer from './slices/expenseSlice';
 import groupReducer from './slices/groupSlice';
 import analyticsReducer from './slices/analyticsSlice';
+import postGameReducer from './slices/postGameAnalyticsSlice';
 import coreReducer from './slices/coreSlice';
 
 export const store = configureStore({
@@ -11,6 +12,7 @@ export const store = configureStore({
     expenses: expenseReducer,
     groups: groupReducer,
     analytics: analyticsReducer,
+    postGame: postGameReducer,
     core: coreReducer,
   },
   middleware: (getDefaultMiddleware) =>

@@ -234,3 +234,75 @@ class WalletAdjustment(TimeStampedModel, UUIDModel):
 
     def __str__(self):
         return f"{self.wallet.name}: {self.amount} ({self.note or 'one-time'})"
+
+
+class FixedCost(TimeStampedModel, UUIDModel):
+    """Recurring bill reminders (Netflix, utilities, etc.)."""
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='fixed_costs',
+    )
+    name = models.CharField(max_length=120)
+    amount = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
+    )
+    currency = models.ForeignKey(
+        Currency,
+        on_delete=models.PROTECT,
+        related_name='fixed_costs',
+    )
+    due_day_of_month = models.PositiveSmallIntegerField(default=1)
+    icon = models.CharField(max_length=50, blank=True)
+    category_label = models.CharField(max_length=80, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'budget_fixed_costs'
+        ordering = ['due_day_of_month', 'name']
+
+    def __str__(self):
+        return f"{self.name} ({self.user_id})"
+
+
+class SavingsGoal(TimeStampedModel, UUIDModel):
+    """User-defined savings target for post-game analytics."""
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='savings_goals',
+    )
+    name = models.CharField(max_length=120)
+    target_amount = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
+    )
+    current_amount = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0'),
+        validators=[MinValueValidator(Decimal('0'))],
+    )
+    target_date = models.DateField(null=True, blank=True)
+    currency = models.ForeignKey(
+        Currency,
+        on_delete=models.PROTECT,
+        related_name='savings_goals',
+    )
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'budget_savings_goals'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.name} ({self.user_id})"
+
+    @property
+    def progress_percent(self):
+        if not self.target_amount:
+            return 0
+        return min(100, float(self.current_amount / self.target_amount) * 100)

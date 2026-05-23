@@ -5,6 +5,7 @@ from rest_framework_simplejwt.views import (
     TokenVerifyView,
 )
 from . import views
+from . import security_views
 
 router = DefaultRouter()
 router.register(r'users', views.UserViewSet)
@@ -31,6 +32,13 @@ urlpatterns = [
     # Email verification
     path('verify-email/', views.SendEmailVerificationView.as_view(), name='send_email_verification'),
     path('verify-email/confirm/<str:token>/', views.ConfirmEmailVerificationView.as_view(), name='confirm_email_verification'),
+
+    path('security/', security_views.security_settings, name='security_settings'),
+    path('security/totp/setup/', security_views.totp_setup, name='totp_setup'),
+    path('security/totp/verify/', security_views.totp_verify, name='totp_verify'),
+    path('security/app-lock/', security_views.set_app_lock_pin, name='set_app_lock_pin'),
+    path('security/app-lock/verify/', security_views.verify_app_lock_pin, name='verify_app_lock_pin'),
+    path('security/delete-account/', security_views.delete_account, name='delete_account'),
     
     # Router URLs
     path('', include(router.urls)),

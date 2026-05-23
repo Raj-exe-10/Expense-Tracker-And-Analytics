@@ -209,7 +209,7 @@ class UserSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
             'full_name', 'phone_number', 'avatar', 'bio',
-            'date_of_birth', 'preferred_currency', 'timezone',
+            'date_of_birth', 'preferred_currency', 'monthly_income', 'timezone',
             'role', 'is_verified', 'is_premium', 'profile_visibility',
             'date_joined', 'last_login', 'profile'
         ]
@@ -239,7 +239,7 @@ class UserUpdateSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'first_name', 'last_name', 'phone_number', 'avatar',
-            'bio', 'date_of_birth', 'preferred_currency', 'timezone',
+            'bio', 'date_of_birth', 'preferred_currency', 'monthly_income', 'timezone',
             'profile_visibility'
         ]
     

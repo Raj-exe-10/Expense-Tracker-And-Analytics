@@ -1,12 +1,16 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
+from .payment_request_views import PaymentRequestViewSet
+from .settlement_reports import settlement_reports
 
 router = DefaultRouter()
 router.register(r'settlements', views.SettlementViewSet, basename='settlement')
 router.register(r'payment-methods', views.PaymentMethodViewSet, basename='payment-method')
+router.register(r'payment-requests', PaymentRequestViewSet, basename='payment-request')
 
 urlpatterns = [
+    path('settlement-reports/', settlement_reports, name='settlement_reports'),
     path('balances/', views.user_balances, name='user_balances'),
     path('groups/<uuid:group_id>/balances/', views.group_balances, name='group_balances'),
     path('settle/', views.create_settlement, name='create_settlement'),

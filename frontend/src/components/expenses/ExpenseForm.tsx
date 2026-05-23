@@ -52,6 +52,7 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { useNavigate, useParams } from 'react-router-dom';
+import { paths } from '../../routes/paths';
 import { useAppDispatch, useAppSelector } from '../../hooks/redux';
 import { createExpense, updateExpense } from '../../store/slices/expenseSlice';
 import { fetchCurrencies, fetchCategories } from '../../store/slices/coreSlice';
@@ -562,7 +563,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
             if (onSuccess) {
               onSuccess(result.payload);
             } else {
-              navigate('/expenses');
+              navigate(paths.expenses);
             }
           }, 1500);
         } else {
@@ -582,7 +583,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
             if (onSuccess) {
               onSuccess(result.payload);
             } else {
-              navigate('/expenses');
+              navigate(paths.expenses);
             }
           }, 1500);
         } else {
@@ -977,7 +978,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
                   onClick={(e) => {
                     e.preventDefault();
                     if (onClose) onClose();
-                    else navigate('/expenses');
+                    else navigate(paths.expenses);
                   }}
                   size="large"
                 >

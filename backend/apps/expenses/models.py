@@ -144,6 +144,9 @@ class Expense(UUIDModel, TimeStampedModel):
     )
     approved_at = models.DateTimeField(null=True, blank=True)
     
+    # Offline sync versioning
+    version = models.PositiveIntegerField(default=1)
+
     # Soft delete
     is_deleted = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)

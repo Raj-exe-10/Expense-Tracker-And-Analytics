@@ -20,6 +20,7 @@ class User(AbstractUser, TimeStampedModel):
         ('user', 'Regular User'),
         ('premium', 'Premium User'),
         ('admin', 'Administrator'),
+        ('enterprise_admin', 'Enterprise Administrator'),
     ]
     
     email = models.EmailField(unique=True, db_index=True)
@@ -39,6 +40,13 @@ class User(AbstractUser, TimeStampedModel):
     
     # User preferences
     preferred_currency = models.CharField(max_length=3, default='USD')
+    monthly_income = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text='Monthly income for cash-flow and post-game analytics',
+    )
     timezone = models.CharField(max_length=50, default='UTC')
     user_notification_preferences = models.JSONField(default=default_dict, blank=True)
     
@@ -117,6 +125,14 @@ class UserProfile(TimeStampedModel):
     total_expenses = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     total_groups = models.IntegerField(default=0)
     expense_count = models.IntegerField(default=0)
+
+    # LedgerCore security & privacy
+    hide_balances = models.BooleanField(default=False)
+    contacts_sync_enabled = models.BooleanField(default=False)
+    biometric_lock_enabled = models.BooleanField(default=False)
+    totp_secret = models.CharField(max_length=64, blank=True)
+    totp_enabled = models.BooleanField(default=False)
+    app_lock_pin_hash = models.CharField(max_length=128, blank=True)
     
     class Meta:
         db_table = 'user_profiles'

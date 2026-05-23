@@ -30,6 +30,7 @@ import {
   PhotoCamera,
 } from '@mui/icons-material';
 import { useAppSelector } from '../hooks/redux';
+import { FinancialSettingsCard } from '../components/settings/FinancialSettingsCard';
 
 const Settings: React.FC = () => {
   const { user } = useAppSelector((state) => state.auth);
@@ -99,6 +100,8 @@ const Settings: React.FC = () => {
       <Typography variant="h4" gutterBottom>
         Settings
       </Typography>
+
+      <FinancialSettingsCard />
 
       {/* Profile Section */}
       <Card sx={{ mb: 3 }}>
