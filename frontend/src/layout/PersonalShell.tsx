@@ -30,7 +30,7 @@ const sidebarItems: SidebarNavItem[] = [
   { label: 'Expenses', path: '/app/expenses', icon: <Receipt />, matchPrefix: true },
   { label: 'People', path: '/app/people', icon: <People />, matchPrefix: true },
   { label: 'Budget', path: '/app/budget', icon: <AccountBalanceWallet /> },
-  { label: 'Analytics', path: '/app/analytics/post-game', icon: <Analytics /> },
+  { label: 'Post-game review', path: '/app/analytics/post-game', icon: <Analytics /> },
   { label: 'Settlements', path: '/app/settlements', icon: <Handshake />, matchPrefix: true },
 ];
 
@@ -73,7 +73,11 @@ export const PersonalShell: React.FC = () => {
         variant="sticky"
         onNotificationsClick={() => navigate('/app/notifications')}
       />
-      <Box sx={{ width: '100%', maxWidth: '100%', minWidth: 0, px: 2, pt: 2, pb: 2, boxSizing: 'border-box' }}>
+      <Box
+        component="main"
+        id="main-content"
+        sx={{ width: '100%', maxWidth: '100%', minWidth: 0, px: 2, pt: 2, pb: 2, boxSizing: 'border-box' }}
+      >
         <Outlet />
       </Box>
       <BottomNav items={mobileNavItems} />

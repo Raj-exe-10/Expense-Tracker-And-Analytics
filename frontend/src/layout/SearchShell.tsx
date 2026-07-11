@@ -53,7 +53,7 @@ export const SearchShell: React.FC = () => {
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', pb: 10 }}>
       <AppTopBar title="LedgerCore Search" variant="sticky" showNotifications={false} />
-      <Box sx={{ width: '100%', px: 2, pt: 2 }}>
+      <Box component="main" id="main-content" sx={{ width: '100%', px: 2, pt: 2 }}>
         <Outlet />
       </Box>
       <BottomNav items={mobileNavItems} />

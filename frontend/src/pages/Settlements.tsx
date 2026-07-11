@@ -198,6 +198,7 @@ const Settlements: React.FC = () => {
   // UI states
   const [loading, setLoading] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [expandedOptimized, setExpandedOptimized] = useState(true);
@@ -346,8 +347,9 @@ const Settlements: React.FC = () => {
   };
 
   const handleQuickSettle = async () => {
-    if (!selectedBalance) return;
+    if (!selectedBalance || submitting) return;
     
+    setSubmitting(true);
     try {
       await settlementsAPI.quickSettle({
         payee_id: selectedBalance.user_id,
@@ -362,12 +364,15 @@ const Settlements: React.FC = () => {
       loadData();
     } catch (err: any) {
       setError(err.response?.data?.detail || err.message || 'Failed to settle');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleConfirmSettlement = async () => {
-    if (!selectedSettlement) return;
+    if (!selectedSettlement || submitting) return;
     
+    setSubmitting(true);
     try {
       await settlementsAPI.confirmSettlement(selectedSettlement.id);
       setSuccess('Settlement confirmed!');
@@ -375,12 +380,15 @@ const Settlements: React.FC = () => {
       loadData();
     } catch (err: any) {
       setError(err.response?.data?.detail || err.message || 'Failed to confirm settlement');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleCompleteSettlement = async () => {
-    if (!selectedSettlement) return;
+    if (!selectedSettlement || submitting) return;
     
+    setSubmitting(true);
     try {
       await settlementsAPI.completeSettlement(selectedSettlement.id);
       setSuccess('Settlement marked as completed!');
@@ -388,12 +396,15 @@ const Settlements: React.FC = () => {
       loadData();
     } catch (err: any) {
       setError(err.response?.data?.detail || err.message || 'Failed to complete settlement');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleSettleExpenseShare = async () => {
-    if (!selectedExpenseSettlement) return;
+    if (!selectedExpenseSettlement || submitting) return;
     
+    setSubmitting(true);
     try {
       await settlementsAPI.settleExpenseShare(selectedExpenseSettlement.id, {
         payment_method: paymentMethod,
@@ -404,12 +415,15 @@ const Settlements: React.FC = () => {
       loadData();
     } catch (err: any) {
       setError(err.response?.data?.detail || err.message || 'Failed to settle expense');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleSendReminder = async () => {
-    if (!selectedBalance) return;
+    if (!selectedBalance || submitting) return;
     
+    setSubmitting(true);
     try {
       await settlementsAPI.sendReminder({
         to_user_id: selectedBalance.user_id,
@@ -421,6 +435,8 @@ const Settlements: React.FC = () => {
       handleCloseReminder();
     } catch (err: any) {
       setError(err.response?.data?.detail || err.message || 'Failed to send reminder');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -636,6 +652,8 @@ const Settlements: React.FC = () => {
           sx={{ borderBottom: 1, borderColor: 'divider' }}
         >
           <Tab 
+            id="settlements-tab-0"
+            aria-controls="settlements-tabpanel-0"
             label={
               <Box display="flex" alignItems="center" gap={1}>
                 <AccountBalance fontSize="small" />
@@ -647,6 +665,8 @@ const Settlements: React.FC = () => {
             } 
           />
           <Tab 
+            id="settlements-tab-1"
+            aria-controls="settlements-tabpanel-1"
             label={
               <Box display="flex" alignItems="center" gap={1}>
                 <SwapHoriz fontSize="small" />
@@ -658,6 +678,8 @@ const Settlements: React.FC = () => {
             } 
           />
           <Tab 
+            id="settlements-tab-2"
+            aria-controls="settlements-tabpanel-2"
             label={
               <Box display="flex" alignItems="center" gap={1}>
                 <History fontSize="small" />
@@ -1413,13 +1435,14 @@ const Settlements: React.FC = () => {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialog}>Cancel</Button>
+          <Button onClick={handleCloseDialog} disabled={submitting}>Cancel</Button>
           {selectedExpenseSettlement ? (
             <Button
               variant="contained"
               color={selectedExpenseSettlement.is_payer ? 'success' : 'primary'}
               onClick={handleSettleExpenseShare}
-              startIcon={<Check />}
+              startIcon={submitting ? <CircularProgress size={18} color="inherit" /> : <Check />}
+              disabled={submitting}
             >
               {selectedExpenseSettlement.is_payer ? 'Confirm Received' : 'Mark as Paid'}
             </Button>
@@ -1431,7 +1454,8 @@ const Settlements: React.FC = () => {
                   ? handleCompleteSettlement
                   : handleConfirmSettlement
               }
-              startIcon={<Check />}
+              startIcon={submitting ? <CircularProgress size={18} color="inherit" /> : <Check />}
+              disabled={submitting}
             >
               {String(selectedSettlement.payer?.id) === String(user?.id)
                 ? 'Mark as Paid'
@@ -1441,7 +1465,8 @@ const Settlements: React.FC = () => {
             <Button
               variant="contained"
               onClick={handleQuickSettle}
-              startIcon={<Payment />}
+              startIcon={submitting ? <CircularProgress size={18} color="inherit" /> : <Payment />}
+              disabled={submitting}
             >
               {selectedBalance?.you_owe ? 'Settle Now' : 'Record Payment'}
             </Button>
@@ -1476,12 +1501,13 @@ const Settlements: React.FC = () => {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseReminder}>Cancel</Button>
+          <Button onClick={handleCloseReminder} disabled={submitting}>Cancel</Button>
           <Button
             variant="contained"
             color="warning"
             onClick={handleSendReminder}
-            startIcon={<Send />}
+            startIcon={submitting ? <CircularProgress size={18} color="inherit" /> : <Send />}
+            disabled={submitting}
           >
             Send Reminder
           </Button>

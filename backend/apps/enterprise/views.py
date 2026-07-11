@@ -1,5 +1,6 @@
 import csv
 import io
+from django.db.models import Q
 from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import viewsets, status
@@ -52,13 +53,22 @@ class ExportJobViewSet(viewsets.ModelViewSet):
         job = serializer.save(created_by=self.request.user, status='processing')
         self._process_job(job)
 
+    def _scoped_expenses(self, job):
+        """Export only expenses the job creator can access (payer/share/group)."""
+        user = job.created_by
+        return Expense.objects.filter(
+            is_deleted=False,
+            expense_date__gte=job.date_from,
+            expense_date__lte=job.date_to,
+        ).filter(
+            Q(paid_by=user) |
+            Q(shares__user=user) |
+            Q(group__memberships__user=user, group__memberships__is_active=True)
+        ).select_related('paid_by', 'category', 'currency').distinct()
+
     def _process_job(self, job):
         try:
-            expenses = Expense.objects.filter(
-                is_deleted=False,
-                expense_date__gte=job.date_from,
-                expense_date__lte=job.date_to,
-            ).select_related('paid_by', 'category', 'currency')[:5000]
+            expenses = self._scoped_expenses(job)[:5000]
 
             buffer = io.StringIO()
             writer = csv.writer(buffer)
@@ -96,11 +106,7 @@ class ExportJobViewSet(viewsets.ModelViewSet):
         job = self.get_object()
         if job.status != 'completed':
             return Response({'detail': 'Export not ready'}, status=status.HTTP_400_BAD_REQUEST)
-        expenses = Expense.objects.filter(
-            is_deleted=False,
-            expense_date__gte=job.date_from,
-            expense_date__lte=job.date_to,
-        )[:5000]
+        expenses = self._scoped_expenses(job)[:5000]
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = f'attachment; filename="ledgercore_export_{job.id}.csv"'
         writer = csv.writer(response)

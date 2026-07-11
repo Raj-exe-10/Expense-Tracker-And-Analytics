@@ -193,26 +193,67 @@ class Settlement(UUIDModel, TimeStampedModel):
         self.completed_at = timezone.now()
     
     def mark_as_completed(self):
-        """Mark settlement as completed"""
+        """Mark settlement as completed and settle related expense shares.
+
+        When group is set, settle shares in that group between payer/payee.
+        When settle_share_ids is provided, settle only those shares.
+        When group is null and no share IDs, settle personal (non-group) shares
+        between the parties up to the settlement amount (FIFO by created_at).
+        """
         from django.utils import timezone
+        from decimal import Decimal
         
         self.status = 'completed'
         self.completed_at = timezone.now()
         self.save()
         
-        # Mark related expense shares as settled
-        # Find expense shares related to this settlement (payer and payee)
         from apps.expenses.models import ExpenseShare
-        ExpenseShare.objects.filter(
-            expense__group=self.group if self.group else None,
+        share_ids = getattr(self, '_settle_share_ids', None)
+        if share_ids:
+            ExpenseShare.objects.filter(
+                id__in=share_ids,
+                user=self.payee,
+                paid_by=self.payer,
+                is_settled=False,
+            ).update(
+                is_settled=True,
+                settled_at=timezone.now(),
+                settlement=self,
+            )
+            return
+
+        if self.group_id is not None:
+            ExpenseShare.objects.filter(
+                expense__group=self.group,
+                user=self.payee,
+                paid_by=self.payer,
+                is_settled=False,
+            ).update(
+                is_settled=True,
+                settled_at=timezone.now(),
+                settlement=self,
+            )
+            return
+
+        # Personal (no group): settle unsettled non-group shares up to amount
+        remaining = Decimal(str(self.amount))
+        shares = ExpenseShare.objects.filter(
+            expense__group__isnull=True,
             user=self.payee,
             paid_by=self.payer,
-            is_settled=False
-        ).update(
-            is_settled=True,
-            settled_at=timezone.now(),
-            settlement=self
-        )
+            is_settled=False,
+        ).order_by('created_at')
+        for share in shares:
+            if remaining <= 0:
+                break
+            share_amount = Decimal(str(share.amount))
+            if share_amount <= remaining:
+                share.is_settled = True
+                share.settled_at = timezone.now()
+                share.settlement = self
+                share.save(update_fields=['is_settled', 'settled_at', 'settlement'])
+                remaining -= share_amount
+            # Partial share settle not supported; leave larger shares for later
 
 
 class Payment(UUIDModel, TimeStampedModel):

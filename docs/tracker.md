@@ -18,6 +18,21 @@ Skip pure Q&A or tiny typos with no real change.
 
 ## 2026-07-11
 
+- **[agent]** Skills + agent-kb updated after audit remediation
+  - Note: Captured sync IDOR/OCC, privilege-field, settlement FIFO, JWT blacklist, CORS, and offline-queue invariants in skills and agent-kb so agents do not reintroduce fixed vulns.
+  - Areas: `.cursor/skills/{offline-sync,add-api-endpoint,expense-tracker-dev}/`, `docs/agent-kb/{known-pitfalls,permissions,do-not,offline-sync,auth-and-roles,settlements}.md`
+  - Commit: uncommitted
+
+- **[fix]** Comprehensive audit remediation (security, sync, settlements, a11y)
+  - Note: Locked UserViewSet (no privilege escalation); scoped expense sync IDOR + OCC version; staff-gated process_all; settlement share scoping + atomic payment approve; JWT blacklist; CORS/docs/Sentry hardening; offline sync mutex; a11y landmarks/labels; Squad terminology.
+  - Areas: `backend/apps/authentication/`, `expenses/sync_views.py`, `payments/`, `config/settings.py`, `frontend/src/services/offlineService.ts`, shells, auth forms
+  - Commit: uncommitted
+
+- **[fix]** Classic Analytics ChunkLoadError recovery
+  - Note: Added per-route `lazyWithRetry` (one reload on stale webpack chunks) for all SPA lazy routes; switched Analytics MUI icons to path imports to shrink the failing icons vendor chunk.
+  - Areas: `frontend/src/utils/lazyWithRetry.ts`, `frontend/src/routes/AppRoutes.tsx`, `frontend/src/pages/Analytics.tsx`
+  - Commit: uncommitted
+
 - **[docs]** Living project tracker
   - Note: Added `docs/tracker.md` to record each development date-wise; wired agents to append on meaningful changes.
   - Areas: `docs/tracker.md`, `docs/README.md`, `AGENTS.md`, `.cursor/skills/expense-tracker-dev/`, `.cursor/rules/`
@@ -116,6 +131,13 @@ Skip pure Q&A or tiny typos with no real change.
   - Commit: `7cae5c2`
 
 ## 2025-09-07
+
+## 2026-07-11
+
+- **[fix]** Frontend audit remediation — P1/P2/P3 (20 items)
+  - Note: P1 — offline sync mutex, removed re-POST + token from IDB saves, fixed relative URLs, partial-failure notification; api.ts 401 interceptor now only retries safe GET/HEAD/OPTIONS; `.env.production` with GENERATE_SOURCEMAP=false. P2 — expenseSlice requestId guard for stale fulfillments; analyticsSlice rejected cases for category/trends + error surfaced in Analytics.tsx; AuthGuard loading state when user null; LoginForm honors ?redirect= / state.from + Apple icon fix + autoComplete + Sign In text visible during load; HomePage actingOn mutex for Approve/Dispute; Settlements submitting state for all dialog buttons; ExpenseDetail unwrap()+error alert; SyncConflictHost try/catch+disable. P3 — mobile shells wrapped in `<Box component="main" id="main-content">`; skip-to-main link in App.tsx; ExpenseList TableRow tabIndex/role/aria-label/onKeyDown; AdminShell mobile wrapped in ThemeProvider; PersonalShell sidebar label "Post-game review"; Groups heading "Squads"; Expenses+Settlements Tab ids; RegisterForm+ForgotPasswordForm autoComplete.
+  - Areas: `frontend/src/services/offlineService.ts`, `frontend/src/services/api.ts`, `frontend/.env.production`, `frontend/src/store/slices/expenseSlice.ts`, `frontend/src/store/slices/analyticsSlice.ts`, `frontend/src/pages/Analytics.tsx`, `frontend/src/routes/guards.tsx`, `frontend/src/components/auth/LoginForm.tsx`, `frontend/src/pages/app/HomePage.tsx`, `frontend/src/pages/Settlements.tsx`, `frontend/src/pages/ExpenseDetail.tsx`, `frontend/src/components/sync/SyncConflictHost.tsx`, `frontend/src/layout/PersonalShell.tsx`, `frontend/src/layout/AdminShell.tsx`, `frontend/src/layout/SearchShell.tsx`, `frontend/src/App.tsx`, `frontend/src/components/expenses/ExpenseList.tsx`, `frontend/src/pages/Groups.tsx`, `frontend/src/pages/Expenses.tsx`, `frontend/src/components/auth/RegisterForm.tsx`, `frontend/src/components/auth/ForgotPasswordForm.tsx`
+  - Commit: uncommitted
 
 - **[docs]** Initial project documentation
   - Note: Added documentation to the project.

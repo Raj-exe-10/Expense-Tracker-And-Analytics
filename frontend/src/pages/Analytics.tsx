@@ -27,22 +27,20 @@ import {
   useTheme,
   CircularProgress,
 } from '@mui/material';
-import {
-  TrendingUp,
-  TrendingDown,
-  Download,
-  Category,
-  AttachMoney,
-  Assessment,
-  BarChart as BarChartIcon,
-  Refresh,
-  Receipt,
-  CalendarToday,
-  Lightbulb,
-  Savings,
-  ShowChart,
-  DonutLarge,
-} from '@mui/icons-material';
+import TrendingUp from '@mui/icons-material/TrendingUp';
+import TrendingDown from '@mui/icons-material/TrendingDown';
+import Download from '@mui/icons-material/Download';
+import Category from '@mui/icons-material/Category';
+import AttachMoney from '@mui/icons-material/AttachMoney';
+import Assessment from '@mui/icons-material/Assessment';
+import BarChartIcon from '@mui/icons-material/BarChart';
+import Refresh from '@mui/icons-material/Refresh';
+import Receipt from '@mui/icons-material/Receipt';
+import CalendarToday from '@mui/icons-material/CalendarToday';
+import Lightbulb from '@mui/icons-material/Lightbulb';
+import Savings from '@mui/icons-material/Savings';
+import ShowChart from '@mui/icons-material/ShowChart';
+import DonutLarge from '@mui/icons-material/DonutLarge';
 import {
   LineChart,
   Line,
@@ -67,7 +65,7 @@ import {
 } from 'recharts';
 import { format, subDays, parseISO, startOfMonth, endOfMonth } from 'date-fns';
 import { useAppDispatch, useAppSelector } from '../hooks/redux';
-import { fetchAnalyticsSummary, fetchCategoryBreakdown, fetchMonthlyTrends, exportReport } from '../store/slices/analyticsSlice';
+import { fetchAnalyticsSummary, fetchCategoryBreakdown, fetchMonthlyTrends, exportReport, clearError as clearAnalyticsError } from '../store/slices/analyticsSlice';
 import { fetchExpenses } from '../store/slices/expenseSlice';
 import { fetchGroups } from '../store/slices/groupSlice';
 
@@ -76,7 +74,7 @@ const COLORS = ['#2196F3', '#4CAF50', '#FF9800', '#F44336', '#9C27B0', '#00BCD4'
 const Analytics: React.FC = () => {
   const theme = useTheme();
   const dispatch = useAppDispatch();
-  const { summary, categoryBreakdown, monthlyTrends, loading: analyticsLoading } = useAppSelector((state) => state.analytics);
+  const { summary, categoryBreakdown, monthlyTrends, loading: analyticsLoading, error: analyticsError } = useAppSelector((state) => state.analytics);
   const { expenses, loading: expensesLoading } = useAppSelector((state) => state.expenses);
   const { groups } = useAppSelector((state) => state.groups);
   
@@ -414,6 +412,13 @@ const Analytics: React.FC = () => {
   
   return (
     <Box sx={{ width: '100%', minWidth: 0 }}>
+      {/* Analytics data error */}
+      {analyticsError && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => dispatch(clearAnalyticsError())}>
+          {analyticsError}
+        </Alert>
+      )}
+
       {/* Success/Error Messages */}
       <Snackbar
         open={!!exportSuccess}

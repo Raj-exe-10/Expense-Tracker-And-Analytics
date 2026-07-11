@@ -347,6 +347,15 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ groupId, currentGroupFilter, 
                   key={expense.id}
                   hover
                   onClick={() => handleRowClick(expense)}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`View expense: ${expense.title || expense.description}`}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleRowClick(expense);
+                    }
+                  }}
                   sx={{ cursor: 'pointer' }}
                 >
                   <TableCell>
@@ -433,6 +442,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ groupId, currentGroupFilter, 
                     <IconButton
                       size="small"
                       onClick={(e) => handleMenuOpen(e, expense)}
+                      aria-label={`More actions for ${expense.title || expense.description}`}
                     >
                       <MoreVert />
                     </IconButton>

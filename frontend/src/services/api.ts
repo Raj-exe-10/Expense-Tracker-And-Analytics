@@ -64,6 +64,13 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
+    // Only auto-retry token refresh for safe (read-only) methods to avoid duplicate mutations
+    const method = (originalRequest.method || 'GET').toUpperCase();
+    const safeMethods = ['GET', 'HEAD', 'OPTIONS'];
+    if (!safeMethods.includes(method)) {
+      return Promise.reject(error);
+    }
+
     const requestUrl = String(originalRequest.url || '');
 
     if (isAuthNoRefreshUrl(requestUrl)) {

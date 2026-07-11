@@ -5,6 +5,7 @@ import { tokenStorage } from '../utils/storage';
 class OfflineService {
   private db: IDBDatabase | null = null;
   private isOnline: boolean = navigator.onLine;
+  private syncInFlight: Promise<void> | null = null;
   
   constructor() {
     this.initDB();
@@ -29,7 +30,6 @@ class OfflineService {
       request.onupgradeneeded = (event: any) => {
         const db = event.target.result;
         
-        // Create object stores
         if (!db.objectStoreNames.contains('pendingExpenses')) {
           const expenseStore = db.createObjectStore('pendingExpenses', { 
             keyPath: 'id', 
@@ -71,13 +71,11 @@ class OfflineService {
         const registration = await navigator.serviceWorker.register('/service-worker.js');
         console.log('Service Worker registered:', registration);
         
-        // Listen for updates
         registration.addEventListener('updatefound', () => {
           const newWorker = registration.installing;
           if (newWorker) {
             newWorker.addEventListener('statechange', () => {
               if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                // New service worker available
                 this.notifyUpdate();
               }
             });
@@ -103,13 +101,11 @@ class OfflineService {
   }
   
   private notifyOnlineStatus(online: boolean) {
-    // Dispatch action to update Redux store
     store.dispatch({
       type: 'app/setOnlineStatus',
       payload: online
     });
     
-    // Show notification
     if (online) {
       this.showNotification('Back online', 'Your data is being synced');
     } else {
@@ -140,10 +136,11 @@ class OfflineService {
     const transaction = this.db!.transaction(['pendingExpenses'], 'readwrite');
     const store = transaction.objectStore('pendingExpenses');
     
+    // Do NOT persist the token — read it at sync time
+    const { token: _omit, ...safeData } = expenseData;
     const data = {
-      ...expenseData,
+      ...safeData,
       timestamp: Date.now(),
-      token: tokenStorage.getAccessToken()
     };
     
     return new Promise((resolve, reject) => {
@@ -196,7 +193,6 @@ class OfflineService {
       request.onsuccess = () => {
         const result = request.result;
         if (result) {
-          // Check if cache is still valid (24 hours)
           const isValid = Date.now() - result.timestamp < 24 * 60 * 60 * 1000;
           resolve(isValid ? result.data : null);
         } else {
@@ -253,7 +249,6 @@ class OfflineService {
     const store = transaction.objectStore('offlineQueue');
     
     if (ids) {
-      // Clear specific items
       const promises = ids.map(id => {
         return new Promise((resolve, reject) => {
           const request = store.delete(id);
@@ -263,7 +258,6 @@ class OfflineService {
       });
       return Promise.all(promises);
     } else {
-      // Clear all
       return new Promise((resolve, reject) => {
         const request = store.clear();
         request.onsuccess = () => resolve(true);
@@ -272,13 +266,29 @@ class OfflineService {
     }
   }
   
-  async syncOfflineData() {
+  async syncOfflineData(): Promise<void> {
     if (!this.isOnline) return;
-    
+
+    // Mutex: share one in-flight sync promise across concurrent callers
+    if (this.syncInFlight) {
+      return this.syncInFlight;
+    }
+
+    this.syncInFlight = this._doSync().finally(() => {
+      this.syncInFlight = null;
+    });
+
+    return this.syncInFlight;
+  }
+
+  private async _doSync(): Promise<void> {
+    let allSucceeded = true;
+
     try {
       const pendingExpenses = await this.getPendingExpenses();
       const base = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-      const token = pendingExpenses[0]?.token || localStorage.getItem('access_token') || '';
+      // Read token at sync time — never from the stored pending items
+      const token = tokenStorage.getAccessToken() || '';
 
       const items = pendingExpenses.map((expense: any) => ({
         id: expense.server_id,
@@ -302,52 +312,50 @@ class OfflineService {
               new CustomEvent('ledgercore:sync-conflict', { detail: { conflicts: result.conflicts } })
             );
           }
-          for (const id of result.applied || []) {
-            const pending = pendingExpenses.find((e: any) => e.server_id === id || !e.server_id);
-            if (pending) await this.removePendingExpense(pending.id);
+          // Remove pending rows that were applied. Match updates by server_id;
+          // match creates (no server_id) to applied IDs that are not existing server_ids.
+          const appliedIds = (result.applied || []).map(String);
+          const knownServerIds = new Set(
+            pendingExpenses.filter((e: any) => e.server_id).map((e: any) => String(e.server_id))
+          );
+          const appliedCreates = appliedIds.filter((id: string) => !knownServerIds.has(id));
+          let createIdx = 0;
+          for (const pending of pendingExpenses) {
+            if (pending.server_id && appliedIds.includes(String(pending.server_id))) {
+              await this.removePendingExpense(pending.id);
+            } else if (!pending.server_id && createIdx < appliedCreates.length) {
+              await this.removePendingExpense(pending.id);
+              createIdx += 1;
+            }
           }
+        } else {
+          allSucceeded = false;
         }
       }
 
-      for (const expense of pendingExpenses) {
-        if (expense.synced) continue;
-        try {
-          const response = await fetch(`${base}/api/expenses/expenses/`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${expense.token || token}`,
-            },
-            body: JSON.stringify(expense.data || expense),
-          });
-          if (response.ok) {
-            await this.removePendingExpense(expense.id);
-          }
-        } catch (error) {
-          console.error('Failed to sync expense:', error);
-        }
-      }
-      
-      // Sync other queued actions
+      // Sync other queued actions (no re-POST of the batch items above)
       const queuedActions = await this.getQueuedActions();
       const successfulIds: number[] = [];
       
       for (const item of queuedActions) {
         try {
-          // Process based on action type
           await this.processQueuedAction(item);
           successfulIds.push(item.id);
         } catch (error) {
           console.error('Failed to process queued action:', error);
+          allSucceeded = false;
         }
       }
       
-      // Clear successful actions
       if (successfulIds.length > 0) {
         await this.clearQueue(successfulIds);
       }
       
-      this.showNotification('Sync complete', 'All offline changes have been synced');
+      if (allSucceeded) {
+        this.showNotification('Sync complete', 'All offline changes have been synced');
+      } else {
+        this.showNotification('Partial sync', 'Some changes could not be synced and will retry later');
+      }
     } catch (error) {
       console.error('Sync failed:', error);
       this.showNotification('Sync failed', 'Some changes could not be synced');
@@ -368,7 +376,6 @@ class OfflineService {
   }
   
   private async processQueuedAction(item: any) {
-    // Process different types of queued actions
     switch (item.type) {
       case 'UPDATE_EXPENSE':
         return this.syncUpdateExpense(item.action);
@@ -382,7 +389,8 @@ class OfflineService {
   }
   
   private async syncUpdateExpense(action: any) {
-    const response = await fetch(`/api/expenses/expenses/${action.id}/`, {
+    const base = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+    const response = await fetch(`${base}/api/expenses/expenses/${action.id}/`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -399,7 +407,8 @@ class OfflineService {
   }
   
   private async syncDeleteExpense(action: any) {
-    const response = await fetch(`/api/expenses/expenses/${action.id}/`, {
+    const base = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+    const response = await fetch(`${base}/api/expenses/expenses/${action.id}/`, {
       method: 'DELETE',
       headers: {
         'Authorization': `Bearer ${tokenStorage.getAccessToken()}`
@@ -412,7 +421,8 @@ class OfflineService {
   }
   
   private async syncCreateGroup(action: any) {
-    const response = await fetch('/api/groups/groups/', {
+    const base = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+    const response = await fetch(`${base}/api/groups/groups/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -428,7 +438,6 @@ class OfflineService {
     return response.json();
   }
   
-  // Check if app can work offline
   isOfflineCapable(): boolean {
     return 'serviceWorker' in navigator && 'indexedDB' in window;
   }
@@ -437,7 +446,6 @@ class OfflineService {
     return this.isOnline;
   }
   
-  // Request notification permission
   async requestNotificationPermission() {
     if ('Notification' in window && Notification.permission === 'default') {
       const permission = await Notification.requestPermission();
@@ -447,6 +455,5 @@ class OfflineService {
   }
 }
 
-// Export singleton instance
 export const offlineService = new OfflineService();
 export default offlineService;

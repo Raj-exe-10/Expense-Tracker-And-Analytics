@@ -213,7 +213,10 @@ class UserSerializer(serializers.ModelSerializer):
             'role', 'is_verified', 'is_premium', 'profile_visibility',
             'date_joined', 'last_login', 'profile'
         ]
-        read_only_fields = ['id', 'date_joined', 'last_login', 'full_name']
+        read_only_fields = [
+            'id', 'date_joined', 'last_login', 'full_name',
+            'role', 'is_verified', 'is_premium',
+        ]
     
     def get_profile(self, obj):
         try:
@@ -341,7 +344,7 @@ class UserFriendshipSerializer(serializers.ModelSerializer):
             'id', 'from_user', 'to_user', 'to_user_id',
             'status', 'message', 'created_at'
         ]
-        read_only_fields = ['id', 'from_user', 'to_user', 'created_at']
+        read_only_fields = ['id', 'from_user', 'to_user', 'status', 'created_at']
     
     def validate_to_user_id(self, value):
         try:
@@ -372,10 +375,12 @@ class UserFriendshipSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         to_user_id = validated_data.pop('to_user_id')
         to_user = User.objects.get(id=to_user_id)
-        
+        validated_data.pop('status', None)
+
         friendship = UserFriendship.objects.create(
             from_user=self.context['request'].user,
             to_user=to_user,
+            status='pending',
             **validated_data
         )
         

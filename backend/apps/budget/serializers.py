@@ -147,6 +147,13 @@ class WalletAllocationWriteSerializer(serializers.ModelSerializer):
         budget = data.get('monthly_budget')
         wallet = data.get('wallet')
         amount = data.get('amount') or Decimal('0')
+        request = self.context.get('request')
+        request_user = getattr(request, 'user', None) if request else None
+        if request_user:
+            if budget and budget.user_id != request_user.id:
+                raise ValidationError('Budget must belong to the authenticated user.')
+            if wallet and wallet.user_id != request_user.id:
+                raise ValidationError('Wallet must belong to the authenticated user.')
         if budget and wallet and budget.user != wallet.user:
             raise ValidationError('Wallet must belong to the budget user.')
         if budget and amount > 0:

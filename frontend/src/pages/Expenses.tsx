@@ -287,6 +287,8 @@ const Expenses: React.FC = () => {
           }}
         >
           <Tab 
+            id="expenses-tab-0"
+            aria-controls="expenses-tabpanel-0"
             label={
               <Box display="flex" alignItems="center" gap={1}>
                 All Expenses
@@ -295,6 +297,8 @@ const Expenses: React.FC = () => {
             } 
           />
           <Tab 
+            id="expenses-tab-1"
+            aria-controls="expenses-tabpanel-1"
             label={
               <Box display="flex" alignItems="center" gap={1}>
                 Personal
@@ -303,6 +307,8 @@ const Expenses: React.FC = () => {
             } 
           />
           <Tab 
+            id="expenses-tab-2"
+            aria-controls="expenses-tabpanel-2"
             label={
               <Box display="flex" alignItems="center" gap={1}>
                 Group Expenses
@@ -310,7 +316,7 @@ const Expenses: React.FC = () => {
               </Box>
             } 
           />
-          <Tab label="Recurring" />
+          <Tab id="expenses-tab-3" aria-controls="expenses-tabpanel-3" label="Recurring" />
         </Tabs>
       </Paper>
 

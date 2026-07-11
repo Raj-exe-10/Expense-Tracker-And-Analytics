@@ -18,8 +18,9 @@ description: >-
 
 - [ ] Correct Django app / frontend folder
 - [ ] No invented endpoints — extend app urls + `api.ts`
-- [ ] Permissions + queryset answered (`permissions.md`)
-- [ ] Squad = Group naming respected
+- [ ] Permissions + queryset answered (`permissions.md`) — include cross-user denial
+- [ ] Squad = Group naming respected (user-facing term: **Squad**)
+- [ ] Sensitive domains (auth, sync, settlements, payments, enterprise) → Security Review in verify
 - [ ] New behavior → skill `write-tests`
 - [ ] Finish with skill `verify-and-fix`
 - [ ] Append entry to `docs/tracker.md` for this change (tag, note, areas, commit or uncommitted)
@@ -35,3 +36,4 @@ description: >-
 - Feature live vs stub: `docs/feature-status.md`
 - Glossary: `docs/glossary.md` (or agent-kb `domain-glossary.md`)
 - Archived megadocs only: `docs/archive/` (not source of truth)
+- Auth/session: `auth-and-roles.md` — JWT blacklist app must stay installed; 401 interceptor retries only safe methods

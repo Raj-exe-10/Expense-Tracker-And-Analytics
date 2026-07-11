@@ -21,9 +21,13 @@ description: >-
 
 ## Permissions checklist
 
-- [ ] Who can call? (IsAuthenticated / role)
+- [ ] Who can call? (IsAuthenticated / role / staff)
 - [ ] Queryset scoped to owner/membership/admin?
 - [ ] UUID/date query params validated?
 - [ ] Wrong user gets 403/404 consistent with siblings?
+- [ ] Privilege fields (`role`, `is_verified`, `is_premium`) never writable by clients?
+- [ ] Client-supplied `payer_id` / `paid_by_id` / `user_id` cannot escalate (force `request.user` or membership check)?
+- [ ] Global/admin actions (e.g. process-all, exports) staff- or role-gated and queryset-scoped?
+- [ ] Non-idempotent mutations: atomic + `select_for_update` where double-submit matters; UI disables while in flight?
 
 See `docs/agent-kb/api-map.md`, `docs/agent-kb/permissions.md`, and `docs/feature-status.md` (do not assume stub features are live).

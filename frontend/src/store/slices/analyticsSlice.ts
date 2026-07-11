@@ -193,10 +193,16 @@ const analyticsSlice = createSlice({
         // Backend returns { breakdown: [...], total: ..., period: {...} }
         state.categoryBreakdown = action.payload.breakdown || action.payload || [];
       })
+      .addCase(fetchCategoryBreakdown.rejected, (state, action) => {
+        state.error = action.payload as string || 'Failed to load category breakdown';
+      })
       // Fetch monthly trends
       .addCase(fetchMonthlyTrends.fulfilled, (state, action) => {
         // Backend returns { trends: [...], period: {...} }
         state.monthlyTrends = action.payload.trends || action.payload || [];
+      })
+      .addCase(fetchMonthlyTrends.rejected, (state, action) => {
+        state.error = action.payload as string || 'Failed to load monthly trends';
       })
       // Export report
       .addCase(exportReport.fulfilled, (state, action) => {

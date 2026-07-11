@@ -63,6 +63,7 @@ interface ExpenseState {
     dateTo?: string;
     group?: string;
   };
+  latestFetchRequestId: string | null;
 }
 
 const initialState: ExpenseState = {
@@ -72,6 +73,7 @@ const initialState: ExpenseState = {
   error: null,
   totalExpenses: 0,
   filters: {},
+  latestFetchRequestId: null,
 };
 
 // Async thunks
@@ -171,11 +173,14 @@ const expenseSlice = createSlice({
   extraReducers: (builder) => {
     builder
       // Fetch expenses
-      .addCase(fetchExpenses.pending, (state) => {
+      .addCase(fetchExpenses.pending, (state, action) => {
         state.loading = true;
         state.error = null;
+        state.latestFetchRequestId = action.meta.requestId;
       })
       .addCase(fetchExpenses.fulfilled, (state, action) => {
+        // Ignore stale responses if a newer request has been dispatched
+        if (state.latestFetchRequestId !== action.meta.requestId) return;
         state.loading = false;
         const payload = action.payload;
         state.expenses = Array.isArray(payload)
@@ -186,6 +191,7 @@ const expenseSlice = createSlice({
           : state.expenses.length;
       })
       .addCase(fetchExpenses.rejected, (state, action) => {
+        if (state.latestFetchRequestId !== action.meta.requestId) return;
         state.loading = false;
         state.error = action.payload as string;
       })

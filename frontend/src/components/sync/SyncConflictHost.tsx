@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Drawer, Box, Typography, Radio, RadioGroup, FormControlLabel,
-  Button, Card, CardContent, Chip,
+  Button, Card, CardContent, Chip, Alert, CircularProgress,
 } from '@mui/material';
 import offlineService from '../../services/offlineService';
 import { syncAPI } from '../../services/api';
@@ -16,6 +16,8 @@ const SyncConflictHost: React.FC = () => {
   const [open, setOpen] = useState(false);
   const [conflicts, setConflicts] = useState<ConflictItem[]>([]);
   const [selected, setSelected] = useState<Record<string, 'local' | 'server'>>({});
+  const [resolving, setResolving] = useState(false);
+  const [resolveError, setResolveError] = useState<string | null>(null);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -33,17 +35,26 @@ const SyncConflictHost: React.FC = () => {
   }, []);
 
   const resolve = async () => {
-    for (const c of conflicts) {
-      const choice = selected[c.id] || 'local';
-      await syncAPI.resolve({
-        id: c.id,
-        choice,
-        data: choice === 'local' ? c.local : c.server,
-      });
+    if (resolving) return;
+    setResolving(true);
+    setResolveError(null);
+    try {
+      for (const c of conflicts) {
+        const choice = selected[c.id] || 'local';
+        await syncAPI.resolve({
+          id: c.id,
+          choice,
+          data: choice === 'local' ? c.local : c.server,
+        });
+      }
+      setOpen(false);
+      setConflicts([]);
+      offlineService.syncOfflineData?.();
+    } catch (err: any) {
+      setResolveError(err?.message || 'Failed to resolve conflict. Please try again.');
+    } finally {
+      setResolving(false);
     }
-    setOpen(false);
-    setConflicts([]);
-    offlineService.syncOfflineData?.();
   };
 
   if (!open) return null;
@@ -74,9 +85,22 @@ const SyncConflictHost: React.FC = () => {
           </CardContent>
         </Card>
       ))}
+      {resolveError && (
+        <Alert severity="error" sx={{ mb: 1 }} onClose={() => setResolveError(null)}>
+          {resolveError}
+        </Alert>
+      )}
       <Box sx={{ display: 'flex', gap: 1 }}>
-        <Button fullWidth variant="outlined" onClick={() => setOpen(false)}>Cancel</Button>
-        <Button fullWidth variant="contained" onClick={resolve}>Resolve</Button>
+        <Button fullWidth variant="outlined" onClick={() => setOpen(false)} disabled={resolving}>Cancel</Button>
+        <Button
+          fullWidth
+          variant="contained"
+          onClick={resolve}
+          disabled={resolving}
+          startIcon={resolving ? <CircularProgress size={18} color="inherit" /> : undefined}
+        >
+          Resolve
+        </Button>
       </Box>
     </Drawer>
   );

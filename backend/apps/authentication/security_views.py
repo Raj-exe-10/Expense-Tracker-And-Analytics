@@ -61,10 +61,10 @@ def totp_verify(request):
             profile.save(update_fields=['totp_enabled'])
             return Response({'success': True})
     except ImportError:
-        if code == '123456':
-            profile.totp_enabled = True
-            profile.save(update_fields=['totp_enabled'])
-            return Response({'success': True, 'warning': 'pyotp not installed; dev bypass used'})
+        return Response(
+            {'detail': 'TOTP library not available'},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
     return Response({'detail': 'Invalid code'}, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -82,19 +82,54 @@ def set_app_lock_pin(request):
 
 
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def verify_app_lock_pin(request):
-    user_id = request.data.get('user_id')
+    """Verify app-lock PIN for the authenticated user only.
+
+    Uses profile-local failed attempt counters so PIN failures do not lock
+    password login (which uses User.failed_login_attempts).
+    """
     pin = request.data.get('pin', '')
-    from django.contrib.auth import get_user_model
-    User = get_user_model()
-    try:
-        user = User.objects.get(pk=user_id)
-    except User.DoesNotExist:
-        return Response({'detail': 'Invalid'}, status=status.HTTP_400_BAD_REQUEST)
+    user = request.user
     profile = _get_profile(user)
+
+    from django.utils import timezone
+    from datetime import timedelta
+
+    # Store lockout on user prefs JSON so PIN failures do not lock password login.
+    lock_meta = getattr(user, 'user_notification_preferences', None) or {}
+    if not isinstance(lock_meta, dict):
+        lock_meta = {}
+    pin_lock = lock_meta.get('app_lock_pin') or {}
+    locked_until = pin_lock.get('locked_until')
+    if locked_until:
+        try:
+            from django.utils.dateparse import parse_datetime
+            until = parse_datetime(locked_until)
+            if until and until > timezone.now():
+                return Response(
+                    {'detail': 'Too many attempts. Try again later.'},
+                    status=status.HTTP_429_TOO_MANY_REQUESTS,
+                )
+        except (TypeError, ValueError):
+            pass
+
     if profile.app_lock_pin_hash and check_password(pin, profile.app_lock_pin_hash):
+        lock_meta['app_lock_pin'] = {'failed': 0, 'locked_until': None}
+        user.user_notification_preferences = lock_meta
+        user.save(update_fields=['user_notification_preferences'])
         return Response({'success': True})
+
+    failed = int(pin_lock.get('failed') or 0) + 1
+    new_meta = {'failed': failed, 'locked_until': None}
+    if failed >= 5:
+        new_meta = {
+            'failed': 0,
+            'locked_until': (timezone.now() + timedelta(minutes=15)).isoformat(),
+        }
+    lock_meta['app_lock_pin'] = new_meta
+    user.user_notification_preferences = lock_meta
+    user.save(update_fields=['user_notification_preferences'])
     return Response({'detail': 'Invalid PIN'}, status=status.HTTP_400_BAD_REQUEST)
 
 

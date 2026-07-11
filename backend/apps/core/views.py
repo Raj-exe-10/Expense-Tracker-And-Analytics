@@ -135,6 +135,8 @@ class CategoryViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action == 'list':
             return [permissions.AllowAny()]
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [permissions.IsAdminUser()]
         return super().get_permissions()
 
     def list(self, request, *args, **kwargs):
@@ -197,6 +199,11 @@ class TagViewSet(viewsets.ModelViewSet):
     queryset = Tag.objects.all()
     serializer_class = TagSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def get_permissions(self):
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [permissions.IsAdminUser()]
+        return super().get_permissions()
     
     def get_queryset(self):
         queryset = super().get_queryset()

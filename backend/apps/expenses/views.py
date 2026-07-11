@@ -77,8 +77,7 @@ class ExpenseViewSet(ExpenseFilterMixin, viewsets.ModelViewSet):
         """Override create to log validation errors"""
         serializer = self.get_serializer(data=request.data)
         if not serializer.is_valid():
-            logger.error(f"Expense creation validation failed: {serializer.errors}")
-            logger.error(f"Request data: {request.data}")
+            logger.error(f"Expense creation validation failed: {list(serializer.errors.keys())}")
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         return super().create(request, *args, **kwargs)
     
@@ -448,7 +447,12 @@ class RecurringExpenseViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['post'])
     def process_all(self, request):
-        """Process all active recurring expenses (usually called by a scheduled task)"""
+        """Process all active recurring expenses (staff/admin only; normally a scheduled task)."""
+        if not (request.user.is_staff or getattr(request.user, 'role', None) in ('admin', 'enterprise_admin')):
+            return Response(
+                {'detail': 'Only administrators can process all recurring expenses.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         processed_count = 0
         today = timezone.now().date()
         

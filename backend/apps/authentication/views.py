@@ -439,8 +439,12 @@ class ConfirmEmailVerificationView(APIView):
             return Response({'error': 'Invalid verification token'}, status=status.HTTP_400_BAD_REQUEST)
 
 
-class UserViewSet(viewsets.ModelViewSet):
-    """User management viewset"""
+class UserViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Read-only user directory for authenticated users.
+    Privilege fields (role, is_verified, is_premium) are never writable via this API.
+    Mutations of other users are admin-only and intentionally not exposed here.
+    """
     queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]

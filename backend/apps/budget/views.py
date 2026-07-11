@@ -59,6 +59,10 @@ class WalletCategoryViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
+        wallet = serializer.validated_data.get('wallet')
+        if wallet is None or wallet.user_id != self.request.user.id:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('Wallet not found or not owned by you.')
         serializer.save()
 
 
@@ -73,6 +77,10 @@ class UserCategoryViewSet(viewsets.ModelViewSet):
         ).select_related('wallet')
 
     def perform_create(self, serializer):
+        wallet = serializer.validated_data.get('wallet')
+        if wallet is not None and wallet.user_id != self.request.user.id:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('Wallet not found or not owned by you.')
         serializer.save(user=self.request.user)
 
 
@@ -201,10 +209,13 @@ class BudgetCategoriesViewSet(viewsets.ViewSet):
     def list(self, request):
         wallet_id = request.query_params.get('wallet_id')
         if wallet_id:
+            # Only allow access to caller's own wallets
+            if not Wallet.objects.filter(id=wallet_id, user=request.user).exists():
+                return Response({'detail': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
             # Categories assigned to this wallet (system) + user categories in this wallet
             from .models import WalletCategory
             system = list(
-                WalletCategory.objects.filter(wallet_id=wallet_id)
+                WalletCategory.objects.filter(wallet_id=wallet_id, wallet__user=request.user)
                 .values_list('category_id', flat=True)
             )
             from .models import UserCategory

@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     # Third-party apps
     'rest_framework',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
     'drf_spectacular',
     'django_extensions',
@@ -186,6 +187,8 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
+    ] if not DEBUG else [
+        'rest_framework.renderers.JSONRenderer',
         'rest_framework.renderers.BrowsableAPIRenderer',
     ],
     'DEFAULT_PARSER_CLASSES': [
@@ -248,14 +251,18 @@ SIMPLE_JWT = {
 # CORS CONFIGURATION
 # ============================================================================
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
+CORS_ALLOWED_ORIGINS = env.list(
+    'CORS_ALLOWED_ORIGINS',
+    default=[
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
+    ],
+)
 
 CORS_ALLOW_CREDENTIALS = True
 
-CORS_ALLOW_ALL_ORIGINS = DEBUG  # Only for development
+# Never allow all origins in production; DEBUG alone must not open CORS.
+CORS_ALLOW_ALL_ORIGINS = False
 
 # ============================================================================
 # API DOCUMENTATION
@@ -456,7 +463,7 @@ if SENTRY_DSN:
             CeleryIntegration(),
         ],
         traces_sample_rate=1.0 if DEBUG else 0.1,
-        send_default_pii=True,
+        send_default_pii=False,
         environment='development' if DEBUG else 'production',
     )
 

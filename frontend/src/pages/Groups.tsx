@@ -472,10 +472,10 @@ const Groups: React.FC = () => {
       <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={4} flexWrap="wrap" gap={2}>
         <Box>
           <Typography variant="h4" fontWeight="bold" gutterBottom>
-            Groups
+            Squads
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Manage your expense sharing groups
+            Manage your expense sharing squads
           </Typography>
         </Box>
         <Button

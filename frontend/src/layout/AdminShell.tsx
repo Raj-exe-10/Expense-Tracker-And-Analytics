@@ -45,23 +45,28 @@ export const AdminShell: React.FC = () => {
 
   if (isMobile) {
     return (
-      <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', pb: 10 }}>
-        <AppTopBar title="LedgerCore Admin" variant="sticky" showNotifications={false} />
-        <Box
-          sx={{
-            width: '100%',
-            maxWidth: '100%',
-            minWidth: 0,
-            px: { xs: 1.5, sm: 2 },
-            pt: 2,
-            pb: 2,
-            boxSizing: 'border-box',
-          }}
-        >
-          <Outlet />
+      <ThemeProvider theme={ledgerCoreAdminLightTheme}>
+        <CssBaseline />
+        <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', pb: 10 }}>
+          <AppTopBar title="LedgerCore Admin" variant="sticky" showNotifications={false} />
+          <Box
+            component="main"
+            id="main-content"
+            sx={{
+              width: '100%',
+              maxWidth: '100%',
+              minWidth: 0,
+              px: { xs: 1.5, sm: 2 },
+              pt: 2,
+              pb: 2,
+              boxSizing: 'border-box',
+            }}
+          >
+            <Outlet />
+          </Box>
+          <BottomNav items={mobileNav} />
         </Box>
-        <BottomNav items={mobileNav} />
-      </Box>
+      </ThemeProvider>
     );
   }
 

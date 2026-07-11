@@ -19,7 +19,7 @@ import {
   Email,
   Lock,
   Google,
-  Facebook,
+  Apple,
 } from '@mui/icons-material';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, Link as RouterLink, useLocation } from 'react-router-dom';
@@ -49,11 +49,21 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister }) => {
     message?: string;
     email?: string;
     sessionExpired?: boolean;
+    from?: { pathname: string };
   } | null;
   const successMessage = locationState?.message;
   const sessionExpiredMessage = locationState?.sessionExpired
     ? 'Your session expired. Please sign in again.'
     : null;
+
+  // Determine post-login redirect: ?redirect= query param or state.from, validated as relative path
+  const queryRedirect = new URLSearchParams(routerLocation.search).get('redirect') || '';
+  const stateFrom = locationState?.from?.pathname || '';
+  const rawRedirect = queryRedirect || stateFrom;
+  const safeRedirect =
+    rawRedirect && rawRedirect.startsWith('/') && !rawRedirect.startsWith('//')
+      ? rawRedirect
+      : '/app/home';
 
   const handleChange = (field: string) => (event: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({
@@ -97,7 +107,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister }) => {
         })
       ).unwrap();
 
-      navigate('/app/home', { replace: true });
+      navigate(safeRedirect, { replace: true });
     } catch (error: any) {
       console.error('Login failed:', error);
     } finally {
@@ -149,6 +159,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister }) => {
             fullWidth
             label="Email Address"
             type="email"
+            autoComplete="email"
             value={formData.email}
             onChange={handleChange('email')}
             error={!!errors.email}
@@ -167,6 +178,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister }) => {
             fullWidth
             label="Password"
             type={showPassword ? 'text' : 'password'}
+            autoComplete="current-password"
             value={formData.password}
             onChange={handleChange('password')}
             error={!!errors.password}
@@ -183,6 +195,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister }) => {
                   <IconButton
                     onClick={() => setShowPassword(!showPassword)}
                     edge="end"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
                     {showPassword ? <VisibilityOff /> : <Visibility />}
                   </IconButton>
@@ -209,8 +222,9 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister }) => {
             size="large"
             disabled={loading}
             sx={{ mb: 2 }}
+            startIcon={loading ? <CircularProgress size={18} color="inherit" /> : undefined}
           >
-            {loading ? <CircularProgress size={24} /> : 'Sign In'}
+            Sign In
           </Button>
 
           <Divider sx={{ my: 2 }}>
@@ -223,7 +237,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister }) => {
             <Button fullWidth variant="outlined" startIcon={<Google />} disabled title="Coming soon">
               Google
             </Button>
-            <Button fullWidth variant="outlined" startIcon={<Facebook />} disabled title="Coming soon">
+            <Button fullWidth variant="outlined" startIcon={<Apple />} disabled title="Coming soon">
               Apple
             </Button>
           </Box>

@@ -209,6 +209,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchToLogin }) =
             <TextField
               fullWidth
               label="First Name"
+              autoComplete="given-name"
               value={formData.firstName}
               onChange={handleChange('firstName')}
               error={!!errors.firstName}
@@ -225,6 +226,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchToLogin }) =
             <TextField
               fullWidth
               label="Last Name"
+              autoComplete="family-name"
               value={formData.lastName}
               onChange={handleChange('lastName')}
               error={!!errors.lastName}
@@ -244,6 +246,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchToLogin }) =
             fullWidth
             label="Email Address"
             type="email"
+            autoComplete="email"
             value={formData.email}
             onChange={handleChange('email')}
             error={!!errors.email}
@@ -262,6 +265,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchToLogin }) =
             fullWidth
             label="Password"
             type={showPassword ? 'text' : 'password'}
+            autoComplete="new-password"
             value={formData.password}
             onChange={handleChange('password')}
             error={!!errors.password}
@@ -309,6 +313,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchToLogin }) =
             fullWidth
             label="Confirm Password"
             type={showConfirmPassword ? 'text' : 'password'}
+            autoComplete="new-password"
             value={formData.confirmPassword}
             onChange={handleChange('confirmPassword')}
             error={!!errors.confirmPassword}

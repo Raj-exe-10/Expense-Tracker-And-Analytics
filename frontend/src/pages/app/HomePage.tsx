@@ -21,6 +21,7 @@ export const HomePage: React.FC = () => {
   const [data, setData] = useState<any>(null);
   const [pending, setPending] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [actingOn, setActingOn] = useState<string | null>(null);
   const loadStarted = useRef(false);
 
   useEffect(() => {
@@ -137,14 +138,24 @@ export const HomePage: React.FC = () => {
               size="small"
               color="error"
               variant="outlined"
-              onClick={() => paymentRequestsAPI.dispute(pr.id).then(() => window.location.reload())}
+              disabled={actingOn === pr.id}
+              onClick={async () => {
+                setActingOn(pr.id);
+                try { await paymentRequestsAPI.dispute(pr.id); window.location.reload(); }
+                finally { setActingOn(null); }
+              }}
             >
               Dispute
             </Button>
             <Button
               size="small"
               variant="contained"
-              onClick={() => paymentRequestsAPI.approve(pr.id).then(() => window.location.reload())}
+              disabled={actingOn === pr.id}
+              onClick={async () => {
+                setActingOn(pr.id);
+                try { await paymentRequestsAPI.approve(pr.id); window.location.reload(); }
+                finally { setActingOn(null); }
+              }}
             >
               Approve
             </Button>

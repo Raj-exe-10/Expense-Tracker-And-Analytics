@@ -78,6 +78,7 @@ const ExpenseDetail: React.FC = () => {
   const [comments, setComments] = useState<any[]>([]);
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const [settling, setSettling] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -126,21 +127,32 @@ const ExpenseDetail: React.FC = () => {
 
   const handleSave = async (expenseData: any) => {
     if (id) {
-      await dispatch(updateExpense({ id, data: expenseData }));
-      setEditMode(false);
-      if (location.pathname.includes('/edit')) {
-        navigate(paths.expenseDetail(id), { replace: true });
-      } else {
-        dispatch(fetchExpenseById(id));
+      setActionError(null);
+      try {
+        await dispatch(updateExpense({ id, data: expenseData })).unwrap();
+        setEditMode(false);
+        if (location.pathname.includes('/edit')) {
+          navigate(paths.expenseDetail(id), { replace: true });
+        } else {
+          dispatch(fetchExpenseById(id));
+        }
+      } catch (err: any) {
+        setActionError(typeof err === 'string' ? err : err?.detail || 'Failed to update expense');
       }
     }
   };
 
   const handleDelete = async () => {
     if (id) {
-      await dispatch(deleteExpense(id));
-      setDeleteDialogOpen(false);
-      navigate(paths.expenses);
+      setActionError(null);
+      try {
+        await dispatch(deleteExpense(id)).unwrap();
+        setDeleteDialogOpen(false);
+        navigate(paths.expenses);
+      } catch (err: any) {
+        setDeleteDialogOpen(false);
+        setActionError(typeof err === 'string' ? err : err?.detail || 'Failed to delete expense');
+      }
     }
   };
 
@@ -238,6 +250,12 @@ const ExpenseDetail: React.FC = () => {
 
   return (
     <Box>
+      {actionError && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setActionError(null)}>
+          {actionError}
+        </Alert>
+      )}
+
       {/* Header */}
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Box display="flex" alignItems="center" gap={2}>

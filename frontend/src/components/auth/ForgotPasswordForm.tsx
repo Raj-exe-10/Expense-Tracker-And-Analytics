@@ -80,6 +80,7 @@ export const ForgotPasswordForm: React.FC = () => {
               fullWidth
               label="Email Address"
               type="email"
+              autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               error={!!error && !success}

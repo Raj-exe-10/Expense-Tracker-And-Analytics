@@ -60,17 +60,23 @@ class SettlementSerializer(serializers.ModelSerializer):
         return data
     
     def create(self, validated_data):
-        payer_id = validated_data.pop('payer_id', None)
+        # payer_id from client is ignored; ViewSet sets payer=request.user
+        validated_data.pop('payer_id', None)
         payee_id = validated_data.pop('payee_id', None)
         payment_method_id = validated_data.pop('payment_method_id', None)
-        
-        if payer_id:
-            validated_data['payer'] = User.objects.get(id=payer_id)
+
+        request = self.context.get('request')
+        if request and request.user and request.user.is_authenticated:
+            validated_data['payer'] = request.user
         if payee_id:
             validated_data['payee'] = User.objects.get(id=payee_id)
         if payment_method_id:
             validated_data['payment_method'] = PaymentMethod.objects.get(id=payment_method_id)
-        
+
+        if validated_data.get('payer') and validated_data.get('payee'):
+            if validated_data['payer'].id == validated_data['payee'].id:
+                raise serializers.ValidationError({'payee_id': 'Payer and payee must differ.'})
+
         return Settlement.objects.create(**validated_data)
 
 

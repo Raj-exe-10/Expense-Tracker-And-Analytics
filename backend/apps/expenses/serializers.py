@@ -161,10 +161,10 @@ class ExpenseSerializer(serializers.ModelSerializer):
             'group', 'group_id', 'paid_by', 'paid_by_id', 'created_by',
             'receipt', 'receipt_image', 'tags', 'tag_ids',
             'is_settled', 'shares', 'shares_data',
-            'comments_count', 'total_shares', 'created_at', 'updated_at'
+            'comments_count', 'total_shares', 'version', 'created_at', 'updated_at'
         ]
         read_only_fields = [
-            'id', 'created_at', 'updated_at', 
+            'id', 'created_at', 'updated_at', 'version',
             'comments_count', 'total_shares'
         ]
     
@@ -438,16 +438,38 @@ class ExpenseSerializer(serializers.ModelSerializer):
             else:
                 raise serializers.ValidationError("Currency is required and no default currency found. Please run: python manage.py seed_currencies")
         
-        # Handle paid_by_id - set the payer
+        # Handle paid_by_id - only allow request user or active group members as payer
         paid_by_id = validated_data.pop('paid_by_id', None)
-        if paid_by_id:
+        request = self.context.get('request')
+        request_user = getattr(request, 'user', None) if request else None
+        if paid_by_id and request_user:
             from django.contrib.auth import get_user_model
             User = get_user_model()
             try:
                 payer = User.objects.get(id=paid_by_id)
-                validated_data['paid_by'] = payer
+                group = validated_data.get('group')
+                if payer.id == request_user.id:
+                    validated_data['paid_by'] = payer
+                elif group is not None:
+                    from apps.groups.models import GroupMembership
+                    if GroupMembership.objects.filter(
+                        group=group, user=payer, is_active=True
+                    ).exists() and GroupMembership.objects.filter(
+                        group=group, user=request_user, is_active=True
+                    ).exists():
+                        validated_data['paid_by'] = payer
+                    else:
+                        raise serializers.ValidationError(
+                            {'paid_by_id': 'Payer must be an active member of the group.'}
+                        )
+                else:
+                    raise serializers.ValidationError(
+                        {'paid_by_id': 'You can only set yourself as payer for personal expenses.'}
+                    )
             except User.DoesNotExist:
                 pass  # Will fall back to request user in perform_create
+        elif request_user and 'paid_by' not in validated_data:
+            validated_data['paid_by'] = request_user
         
         # Ensure JSON fields have default values if not provided (required by model validation)
         # These fields cannot be blank, so we always set them to empty dict/list if not provided
@@ -468,6 +490,37 @@ class ExpenseSerializer(serializers.ModelSerializer):
             validated_data['expense_type'] = 'group'
         else:
             validated_data['expense_type'] = 'individual'
+
+        # Validate shares_data before creating the expense
+        if shares_data and len(shares_data) > 0:
+            submitted_user_ids = [
+                s.get('user_id') for s in shares_data if s.get('user_id')
+            ]
+            group = validated_data.get('group')
+            if group is not None:
+                active_member_ids = {
+                    str(uid)
+                    for uid in group.memberships.filter(is_active=True).values_list(
+                        'user_id', flat=True
+                    )
+                }
+                invalid = {str(uid) for uid in submitted_user_ids} - active_member_ids
+                if invalid:
+                    raise serializers.ValidationError(
+                        {
+                            'shares_data': (
+                                f'User IDs are not active group members: {sorted(invalid)}'
+                            )
+                        }
+                    )
+            else:
+                payer = validated_data.get('paid_by')
+                allowed = {str(payer.id)} if payer else set()
+                invalid = {str(uid) for uid in submitted_user_ids} - allowed
+                if invalid:
+                    raise serializers.ValidationError(
+                        {'shares_data': 'Non-group expenses can only have shares for the payer'}
+                    )
         
         # Create expense (expense_date should already be set from to_internal_value or create method)
         # Use _skip_share_creation to prevent model's save() from auto-creating shares
@@ -542,15 +595,37 @@ class ExpenseSerializer(serializers.ModelSerializer):
             # Clear user_category if not sent (keep existing category logic separate)
             validated_data['user_category'] = None
         
-        # Handle paid_by_id - update the payer
+        # Handle paid_by_id - only allow request user or active group members
         if paid_by_id is not None:
             from django.contrib.auth import get_user_model
             User = get_user_model()
             import logging
             logger = logging.getLogger(__name__)
+            request = self.context.get('request')
+            request_user = getattr(request, 'user', None) if request else None
             try:
                 payer = User.objects.get(id=paid_by_id)
-                validated_data['paid_by'] = payer
+                group = validated_data.get('group', instance.group)
+                if request_user and payer.id == request_user.id:
+                    validated_data['paid_by'] = payer
+                elif group is not None and request_user:
+                    from apps.groups.models import GroupMembership
+                    if GroupMembership.objects.filter(
+                        group=group, user=payer, is_active=True
+                    ).exists() and GroupMembership.objects.filter(
+                        group=group, user=request_user, is_active=True
+                    ).exists():
+                        validated_data['paid_by'] = payer
+                    else:
+                        raise serializers.ValidationError(
+                            {'paid_by_id': 'Payer must be an active member of the group.'}
+                        )
+                elif request_user:
+                    raise serializers.ValidationError(
+                        {'paid_by_id': 'You can only set yourself as payer for personal expenses.'}
+                    )
+                else:
+                    validated_data['paid_by'] = payer
                 logger.info(f"Updated paid_by to: {payer.get_full_name()} (id: {payer.id})")
             except User.DoesNotExist:
                 logger.warning(f"User with id={paid_by_id} not found for paid_by")
@@ -610,6 +685,32 @@ class ExpenseSerializer(serializers.ModelSerializer):
         
         # Update shares if provided
         if shares_data is not None:
+            submitted_user_ids = [
+                s.get('user_id') for s in shares_data if s.get('user_id')
+            ]
+            if instance.group:
+                active_member_ids = {
+                    str(uid)
+                    for uid in instance.group.memberships.filter(
+                        is_active=True
+                    ).values_list('user_id', flat=True)
+                }
+                invalid = {str(uid) for uid in submitted_user_ids} - active_member_ids
+                if invalid:
+                    raise serializers.ValidationError(
+                        {
+                            'shares_data': (
+                                f'User IDs are not active group members: {sorted(invalid)}'
+                            )
+                        }
+                    )
+            else:
+                allowed = {str(instance.paid_by_id)}
+                invalid = {str(uid) for uid in submitted_user_ids} - allowed
+                if invalid:
+                    raise serializers.ValidationError(
+                        {'shares_data': 'Non-group expenses can only have shares for the payer'}
+                    )
             # Delete existing shares
             instance.shares.all().delete()
             

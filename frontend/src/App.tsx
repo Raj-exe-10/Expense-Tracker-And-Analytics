@@ -78,9 +78,49 @@ function AuthBootstrap({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+const skipLinkStyles: React.CSSProperties = {
+  position: 'absolute',
+  left: '-9999px',
+  top: 'auto',
+  width: '1px',
+  height: '1px',
+  overflow: 'hidden',
+};
+
+const skipLinkFocusStyles: React.CSSProperties = {
+  position: 'fixed',
+  top: 8,
+  left: 8,
+  zIndex: 9999,
+  padding: '8px 16px',
+  background: '#000',
+  color: '#fff',
+  borderRadius: 4,
+  fontSize: 14,
+  fontWeight: 600,
+  width: 'auto',
+  height: 'auto',
+  overflow: 'visible',
+};
+
+function SkipLink() {
+  const [focused, setFocused] = React.useState(false);
+  return (
+    <a
+      href="#main-content"
+      style={focused ? skipLinkFocusStyles : skipLinkStyles}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+    >
+      Skip to main content
+    </a>
+  );
+}
+
 function App() {
   return (
     <Router>
+      <SkipLink />
       <AuthBootstrap>
         <ThemeWrapper>
           <AppRoutes />

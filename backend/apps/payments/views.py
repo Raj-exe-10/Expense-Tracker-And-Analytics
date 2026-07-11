@@ -33,7 +33,8 @@ class SettlementViewSet(viewsets.ModelViewSet):
         ).distinct().order_by('-created_at')
     
     def perform_create(self, serializer):
-        serializer.save()
+        # Payer is always the authenticated user; ignore client-supplied payer_id
+        serializer.save(payer=self.request.user)
     
     @action(detail=True, methods=['post'])
     def confirm(self, request, pk=None):
@@ -359,13 +360,19 @@ def create_settlement(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def quick_settle(request):
-    """Quick settle - create settlement and optionally complete immediately"""
+    """Quick settle - create settlement and optionally complete immediately.
+
+    When completing immediately without a group_id, pass settle_share_ids to
+    mark specific ExpenseShare rows; otherwise only the Settlement record is
+    created (no mass personal-share settle).
+    """
     user = request.user
     payee_id = request.data.get('payee_id')
     amount = request.data.get('amount')
     payment_method = request.data.get('payment_method', 'cash')
     note = request.data.get('note', '')
     group_id = request.data.get('group_id')
+    settle_share_ids = request.data.get('settle_share_ids') or []
     complete_immediately = request.data.get('complete_immediately', False)
     
     if not payee_id or not amount:
@@ -407,13 +414,25 @@ def quick_settle(request):
     if group_id:
         try:
             group = Group.objects.get(id=group_id)
+            # Require membership for both parties
+            from apps.groups.models import GroupMembership
+            if not GroupMembership.objects.filter(group=group, user=user, is_active=True).exists():
+                return Response(
+                    {'detail': 'You are not a member of this group'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
             settlement_data['group'] = group
         except Group.DoesNotExist:
-            pass
+            return Response(
+                {'detail': 'Group not found'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
     
     settlement = Settlement.objects.create(**settlement_data)
     
     if complete_immediately:
+        if settle_share_ids:
+            settlement._settle_share_ids = settle_share_ids
         settlement.mark_as_completed()
     
     # Send notification to payee
