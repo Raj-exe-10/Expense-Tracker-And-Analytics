@@ -41,6 +41,7 @@ Guidance for AI agents working in this repository.
 3. **No invented APIs** — Extend existing app urls + `*API` modules.
 4. **Permissions** — Every endpoint: who can call it, what queryset ([permissions.md](docs/agent-kb/permissions.md)).
 5. **Secrets** — Never commit real `.env` credentials.
+6. **Track changes** — After any meaningful development or modification, append an entry to [`docs/tracker.md`](docs/tracker.md) (date heading, tag, note, areas, commit hash or `uncommitted`). When committing later, fill in the hash.
 
 ## Skills to use
 

@@ -12,5 +12,6 @@ After non-trivial code changes in this repo:
 3. Launch Bugbot on the diff; add Security Review for auth/payments/admin/sync/uploads.
 4. **Main agent fixes** blocking findings (compile errors, failed tests, Critical/High). Review subagents stay readonly.
 5. Do not say the task is done until checks pass or remaining blockers are reported to the user.
+6. If application or docs/agent files changed, append a dated entry to `docs/tracker.md` before claiming done (or update the commit hash when the user asks to commit).
 
-Max 3 verify→fix loops. Docs-only or explicit “review only” requests skip the fix loop.
+Max 3 verify→fix loops. Docs-only or explicit “review only” requests skip the fix loop; still update `docs/tracker.md` when docs/agent packs change.

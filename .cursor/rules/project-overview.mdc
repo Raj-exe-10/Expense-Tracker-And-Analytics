@@ -11,4 +11,5 @@ alwaysApply: true
 - Three SPA zones: `/app` PersonalShell, `/search` SearchShell, `/admin` AdminShell (admin roles only).
 - HTTP only via `frontend/src/services/api.ts` `*API` modules; register backend routes in the owning app.
 - After non-trivial code edits: run skill `verify-and-fix`. For new behavior: skill `write-tests`.
+- After meaningful changes: append to `docs/tracker.md` (development log).
 - See `docs/agent-kb/known-pitfalls.md` and `docs/agent-kb/do-not.md`.

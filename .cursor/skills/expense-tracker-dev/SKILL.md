@@ -22,6 +22,7 @@ description: >-
 - [ ] Squad = Group naming respected
 - [ ] New behavior → skill `write-tests`
 - [ ] Finish with skill `verify-and-fix`
+- [ ] Append entry to `docs/tracker.md` for this change (tag, note, areas, commit or uncommitted)
 
 ## Pointers
 
@@ -30,6 +31,7 @@ description: >-
 - Client: `frontend/src/services/api.ts`
 - Do-not list: `docs/agent-kb/do-not.md`
 - Human docs index (diagrams): `docs/README.md`
+- Development log: `docs/tracker.md` (append on meaningful changes)
 - Feature live vs stub: `docs/feature-status.md`
 - Glossary: `docs/glossary.md` (or agent-kb `domain-glossary.md`)
 - Archived megadocs only: `docs/archive/` (not source of truth)

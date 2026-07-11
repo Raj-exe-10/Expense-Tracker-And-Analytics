@@ -14,6 +14,7 @@ Product UI brand: **LedgerCore**. Repository name: Expense Tracker & Analytics.
 | [flows.md](flows.md) | Everyone | Sequence diagrams (JWT, sync, settle, logs) |
 | [feature-status.md](feature-status.md) | Everyone | **Live vs partial vs stub** capabilities |
 | [glossary.md](glossary.md) | Everyone | Squad, wallet, zones, roles, … |
+| [tracker.md](tracker.md) | Everyone | Date-wise log of developments and commits |
 
 ## Live API reference
 
