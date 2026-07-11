@@ -22,7 +22,7 @@ const PeoplePage: React.FC = () => {
   const owesYou = balances.filter((b: any) => b.owes_you);
 
   return (
-    <Box>
+    <Box sx={{ width: '100%', minWidth: 0 }}>
       <ToggleButtonGroup
         value={tab}
         exclusive

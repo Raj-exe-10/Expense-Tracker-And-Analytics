@@ -344,9 +344,9 @@ export default function Budget() {
   }
 
   return (
-    <Box sx={{ p: 2 }}>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-        <Typography variant="h5" fontWeight="bold">
+    <Box sx={{ width: '100%' }}>
+      <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2} flexWrap="wrap" gap={1}>
+        <Typography variant="h4" fontWeight="bold">
           Budget & Envelopes
         </Typography>
         <Box>
@@ -371,7 +371,7 @@ export default function Budget() {
       {budget && (
         <>
           <Grid container spacing={2}>
-            <Grid item xs={12} md={4}>
+            <Grid item xs={12} sm={6} lg={4}>
               <Card>
                 <CardContent>
                   <Typography color="textSecondary" gutterBottom>
@@ -397,7 +397,7 @@ export default function Budget() {
                 </CardContent>
               </Card>
             </Grid>
-            <Grid item xs={12} md={4}>
+            <Grid item xs={12} sm={6} lg={4}>
               <Card sx={{ borderLeft: 4, borderColor: unassigned > 0 ? 'warning.main' : 'success.main' }}>
                 <CardContent>
                   <Typography color="textSecondary" gutterBottom>
@@ -414,7 +414,7 @@ export default function Budget() {
                 </CardContent>
               </Card>
             </Grid>
-            <Grid item xs={12} md={4}>
+            <Grid item xs={12} sm={6} lg={4}>
               <Card>
                 <CardContent>
                   <Typography color="textSecondary" gutterBottom>
@@ -473,7 +473,7 @@ export default function Budget() {
                 {wallets.map((w) => {
                   const hasAllocation = budget.wallet_allocations?.some((a) => a.wallet === w.id);
                   return (
-                    <Grid item xs={12} sm={6} md={4} key={w.id}>
+                    <Grid item xs={12} sm={6} md={4} lg={3} key={w.id}>
                       <Card variant="outlined" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2, py: 1.5 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <Box
@@ -547,7 +547,7 @@ export default function Budget() {
                 const pct = limit > 0 ? (spent / limit) * 100 : 0;
                 const isOver = remaining < 0;
                 return (
-                  <Grid item xs={12} sm={6} md={4} key={alloc.id}>
+                  <Grid item xs={12} sm={6} md={4} lg={3} key={alloc.id}>
                     <Card sx={{ borderLeft: 4, borderColor: alloc.wallet_type === 'sinking_fund' ? 'info.main' : (alloc as any).color || 'primary.main' }}>
                       <CardContent>
                         <Box display="flex" justifyContent="space-between" alignItems="center">

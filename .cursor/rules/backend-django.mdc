@@ -1,0 +1,15 @@
+---
+description: Django/DRF conventions for LedgerCore backend
+globs: backend/**/*.py
+alwaysApply: false
+---
+
+# Backend Django conventions
+
+- Domain models: prefer `UUIDModel` + `TimeStampedModel` from `apps.core.models`; keep explicit `db_table` where existing models use it.
+- Put logic in the owning app under `backend/apps/<app>/`. Register routes in that app’s `urls.py`; only add prefixes in `config/urls.py` for new top-level APIs.
+- Prefer `ModelViewSet` + router for CRUD; function views for aggregates (analytics pattern).
+- Permissions + queryset scoping required — see `docs/agent-kb/permissions.md`.
+- Validate UUID/date query params before filtering.
+- Model changes: skill `django-migrate`. New behavior: skill `write-tests` under `apps/<app>/tests/`.
+- Sync protocol: read `docs/agent-kb/offline-sync.md` before editing `expenses/sync_views.py`.

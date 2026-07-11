@@ -3,7 +3,7 @@ import { Box } from '@mui/material';
 import { Outlet } from 'react-router-dom';
 import { AppSidebar, AppSidebarProps } from './AppSidebar';
 import { AppTopBar, AppTopBarProps } from './AppTopBar';
-import { CONTENT_MAX_WIDTH } from './constants';
+import { PAGE_PADDING_X, PAGE_PADDING_Y } from './constants';
 
 interface DesktopShellLayoutProps {
   sidebar: AppSidebarProps;
@@ -16,20 +16,23 @@ export const DesktopShellLayout: React.FC<DesktopShellLayoutProps> = ({ sidebar,
     <Box
       component="main"
       sx={{
-        flexGrow: 1,
+        flex: '1 1 0',
         display: 'flex',
         flexDirection: 'column',
         minWidth: 0,
+        width: 0,
       }}
     >
       <AppTopBar {...topBar} variant="static" />
       <Box
         sx={{
           flex: 1,
-          px: { md: 3, lg: 4 },
-          py: 3,
-          maxWidth: CONTENT_MAX_WIDTH.lg,
           width: '100%',
+          maxWidth: '100%',
+          minWidth: 0,
+          px: PAGE_PADDING_X,
+          py: PAGE_PADDING_Y,
+          boxSizing: 'border-box',
         }}
       >
         <Outlet />

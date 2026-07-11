@@ -40,12 +40,16 @@ import {
   Security,
   Payment,
   History,
+  Logout as LogoutIcon,
 } from '@mui/icons-material';
-import { useAppSelector } from '../hooks/redux';
+import { useAppDispatch, useAppSelector } from '../hooks/redux';
+import { logout } from '../store/slices/authSlice';
 import { useNavigate } from 'react-router-dom';
+import { resetAuthCheckGuard } from '../auth/authBootstrap';
 
 const Profile: React.FC = () => {
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
   const { user } = useAppSelector((state) => state.auth);
   const [editMode, setEditMode] = useState(false);
   const [changePasswordDialog, setChangePasswordDialog] = useState(false);
@@ -107,6 +111,12 @@ const Profile: React.FC = () => {
     // In real app, would save to backend
   };
 
+  const handleLogout = async () => {
+    await dispatch(logout());
+    resetAuthCheckGuard();
+    navigate('/login', { replace: true });
+  };
+
   const handleAvatarUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
       const reader = new FileReader();
@@ -120,14 +130,14 @@ const Profile: React.FC = () => {
   };
 
   return (
-    <Box>
+    <Box sx={{ width: '100%', minWidth: 0 }}>
       <Typography variant="h4" gutterBottom>
         Profile
       </Typography>
 
       <Grid container spacing={3}>
         {/* Profile Info Card */}
-        <Grid item xs={12} md={4}>
+        <Grid item xs={12} md={4} lg={3}>
           <Card>
             <CardContent>
               <Box display="flex" flexDirection="column" alignItems="center">
@@ -262,7 +272,7 @@ const Profile: React.FC = () => {
         </Grid>
 
         {/* Profile Details */}
-        <Grid item xs={12} md={8}>
+        <Grid item xs={12} md={8} lg={9}>
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom>
@@ -417,7 +427,7 @@ const Profile: React.FC = () => {
                     fullWidth
                     variant="outlined"
                     startIcon={<Settings />}
-                    onClick={() => navigate('/settings')}
+                    onClick={() => navigate('/app/settings')}
                   >
                     Account Settings
                   </Button>
@@ -427,7 +437,7 @@ const Profile: React.FC = () => {
                     fullWidth
                     variant="outlined"
                     startIcon={<Payment />}
-                    onClick={() => navigate('/settlements')}
+                    onClick={() => navigate('/app/settlements')}
                   >
                     Payment Methods
                   </Button>
@@ -437,12 +447,26 @@ const Profile: React.FC = () => {
                     fullWidth
                     variant="outlined"
                     startIcon={<History />}
-                    onClick={() => navigate('/expenses')}
+                    onClick={() => navigate('/app/expenses')}
                   >
                     Expense History
                   </Button>
                 </Grid>
               </Grid>
+
+              <Divider sx={{ my: 2 }} />
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                Sign out of LedgerCore on this device. You can sign in again anytime.
+              </Typography>
+              <Button
+                fullWidth
+                variant="outlined"
+                color="error"
+                startIcon={<LogoutIcon />}
+                onClick={handleLogout}
+              >
+                Sign out
+              </Button>
             </CardContent>
           </Card>
 

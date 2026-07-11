@@ -43,6 +43,7 @@ const AdminLedgerPage = lazy(() => import('../pages/admin/AdminLedgerPage'));
 const AdminVaultPage = lazy(() => import('../pages/admin/AdminVaultPage'));
 const AdminReportsPage = lazy(() => import('../pages/admin/AdminReportsPage'));
 const AdminSettingsPage = lazy(() => import('../pages/admin/AdminSettingsPage'));
+const AdminSystemLogsPage = lazy(() => import('../pages/admin/AdminSystemLogsPage'));
 const TermsPage = lazy(() => import('../pages/legal/TermsPage'));
 const PrivacyPage = lazy(() => import('../pages/legal/PrivacyPage'));
 const SyncConflictHost = lazy(() => import('../components/sync/SyncConflictHost'));
@@ -159,6 +160,7 @@ export const AppRoutes: React.FC = () => (
         <Route index element={<AdminDashboard />} />
         <Route path="ledger" element={<AdminLedgerPage />} />
         <Route path="audit" element={<AdminAuditPage />} />
+        <Route path="logs" element={<AdminSystemLogsPage />} />
         <Route path="entities" element={<AdminEntitiesPage />} />
         <Route path="reports" element={<AdminReportsPage />} />
         <Route path="export" element={<AdminExportPage />} />

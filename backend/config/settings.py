@@ -34,6 +34,8 @@ SECRET_KEY = env('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env('DEBUG')
+# Mirror SystemLog / HTTP trace to terminal (admin UI still stores all events in DB)
+LOG_TO_CONSOLE = env.bool('LOG_TO_CONSOLE', default=True)
 
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['localhost', '127.0.0.1'])
 
@@ -203,18 +205,23 @@ REST_FRAMEWORK = {
         'rest_framework.throttling.UserRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'anon': '100/hour',
-        'user': '1000/hour',
+        # Production defaults (~100+ concurrent users; per-user limits, shared cache in prod)
+        'anon': '500/hour',
+        'user': '5000/hour',
+        'login': '10/minute',
+        'refresh': '60/minute',
     },
     'EXCEPTION_HANDLER': 'apps.core.exceptions.custom_exception_handler',  # Custom exception handler
 }
 
-# Local dev: disable API throttling (avoids 429 loops when the SPA fires many parallel requests)
+# Local dev: disable global throttling; keep scoped rates for login/refresh views
 if DEBUG:
     REST_FRAMEWORK['DEFAULT_THROTTLE_CLASSES'] = []
     REST_FRAMEWORK['DEFAULT_THROTTLE_RATES'] = {
         'anon': '10000/minute',
         'user': '10000/minute',
+        'login': '100/minute',
+        'refresh': '1000/minute',
     }
 
 # ============================================================================
@@ -388,6 +395,21 @@ LOGGING = {
             'handlers': ['file', 'console'],
             'level': 'INFO',
             'propagate': True,
+        },
+        'django.server': {
+            'handlers': ['file'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'api': {
+            'handlers': ['file', 'console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'ledgercore.trace': {
+            'handlers': ['file', 'console'],
+            'level': 'INFO',
+            'propagate': False,
         },
         'apps': {
             'handlers': ['file', 'console'],

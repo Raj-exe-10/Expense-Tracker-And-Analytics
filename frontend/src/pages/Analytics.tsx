@@ -413,7 +413,7 @@ const Analytics: React.FC = () => {
   );
   
   return (
-    <Box>
+    <Box sx={{ width: '100%', minWidth: 0 }}>
       {/* Success/Error Messages */}
       <Snackbar
         open={!!exportSuccess}
@@ -460,9 +460,9 @@ const Analytics: React.FC = () => {
       </Box>
       
       {/* Controls */}
-      <Card sx={{ mb: 3, p: 2 }}>
-        <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2}>
-          <Box display="flex" gap={2} flexWrap="wrap">
+      <Card sx={{ mb: 3, p: { xs: 2, md: 2.5 } }}>
+        <Box display="flex" justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" gap={2}>
+          <Box display="flex" gap={2} flexWrap="wrap" sx={{ flex: 1, minWidth: 0 }}>
             <FormControl size="small" sx={{ minWidth: 140 }}>
               <InputLabel>Time Period</InputLabel>
               <Select
@@ -585,7 +585,7 @@ const Analytics: React.FC = () => {
       {viewType === 'overview' && (
         <Grid container spacing={3}>
           {/* Expense Trend */}
-          <Grid item xs={12} lg={8}>
+          <Grid item xs={12} lg={8} xl={8}>
             <Card sx={{ height: '100%' }}>
               <CardContent>
                 <Typography variant="h6" fontWeight={600} gutterBottom>

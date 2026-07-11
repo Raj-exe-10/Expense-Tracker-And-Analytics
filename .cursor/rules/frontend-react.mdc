@@ -1,0 +1,14 @@
+---
+description: React/MUI/Redux conventions for LedgerCore frontend
+globs: frontend/src/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Frontend React conventions
+
+- Place pages in the correct zone (`pages/app`, `pages/admin`, `pages/search`, `pages/landing`) and register in `routes/AppRoutes.tsx` under the matching shell + guard.
+- Use Redux slices + typed hooks; call backend only through `services/api.ts` `*API` helpers.
+- Auth: tokens via storage utils; refresh via `services/authSession.ts` (no ad-hoc full reload on 401).
+- Layout: reuse `PageShell` / `layout/constants.ts`. App theme: `theme/ledgerCoreTheme.ts`.
+- Prefer focused unit tests (slices/utils) over brittle full-page snapshots — `docs/agent-kb/testing.md`.
+- After edits: `npx tsc --noEmit` as part of `verify-and-fix`.

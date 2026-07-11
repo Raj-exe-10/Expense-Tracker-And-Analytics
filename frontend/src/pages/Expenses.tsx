@@ -204,7 +204,7 @@ const Expenses: React.FC = () => {
   }
 
   return (
-    <Box>
+    <Box sx={{ width: '100%', minWidth: 0 }}>
       <Snackbar
         open={!!successMessage}
         autoHideDuration={3000}
@@ -217,8 +217,15 @@ const Expenses: React.FC = () => {
       </Snackbar>
       
       {/* Header */}
-      <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={3}>
-        <Box>
+      <Box
+        display="flex"
+        justifyContent="space-between"
+        alignItems="flex-start"
+        mb={3}
+        flexWrap="wrap"
+        gap={2}
+      >
+        <Box sx={{ minWidth: 0, flex: 1 }}>
           <Typography variant="h4" fontWeight="600" gutterBottom>
             Expenses
           </Typography>
@@ -226,7 +233,7 @@ const Expenses: React.FC = () => {
             Track and manage all your expenses in one place
           </Typography>
         </Box>
-        <Box display="flex" gap={1}>
+        <Box display="flex" gap={1} flexWrap="wrap">
           <Tooltip title="Refresh">
             <IconButton onClick={handleRefresh} disabled={loading}>
               <Refresh />
@@ -246,8 +253,8 @@ const Expenses: React.FC = () => {
 
       {/* Stats Summary */}
       {storeExpenses && storeExpenses.length > 0 && (
-        <Paper sx={{ p: 2, mb: 3, bgcolor: 'primary.50' }} variant="outlined">
-          <Box display="flex" gap={4} flexWrap="wrap">
+        <Paper sx={{ p: 2, mb: 3, bgcolor: 'action.hover' }} variant="outlined">
+          <Box display="flex" gap={{ xs: 2, sm: 4 }} flexWrap="wrap" justifyContent={{ xs: 'space-between', sm: 'flex-start' }}>
             <Box>
               <Typography variant="caption" color="text.secondary">Total Expenses</Typography>
               <Typography variant="h5" fontWeight="600">{totalExpenses || storeExpenses.length}</Typography>

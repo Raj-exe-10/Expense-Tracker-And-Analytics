@@ -327,8 +327,8 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ groupId, currentGroupFilter, 
         </Box>
 
         {/* Table */}
-        <TableContainer>
-          <Table>
+        <TableContainer sx={{ width: '100%', overflowX: 'auto' }}>
+          <Table sx={{ minWidth: 720 }}>
             <TableHead>
               <TableRow>
                 <TableCell>Date</TableCell>

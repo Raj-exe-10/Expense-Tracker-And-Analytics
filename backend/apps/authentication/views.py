@@ -27,18 +27,30 @@ from .serializers import (
     PasswordResetConfirmSerializer, EmailVerificationSerializer,
     UserFriendshipSerializer, SimpleUserSerializer
 )
-from apps.core.models import ActivityLog
+from apps.core.system_logging import record_user_activity
 
 
 class LoginRateThrottle(AnonRateThrottle):
-    """Rate limiting for login endpoint - 5 attempts per minute"""
-    rate = '5/minute'
+    """Brute-force protection on login."""
+    scope = 'login'
+    rate = '10/minute'
+
+
+class RefreshRateThrottle(AnonRateThrottle):
+    """Limit refresh storms from expired sessions / tab herds."""
+    scope = 'refresh'
+    rate = '60/minute'
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     """Custom JWT token view with enhanced user data"""
     serializer_class = CustomTokenObtainPairSerializer
     throttle_classes = [LoginRateThrottle]
+
+
+class ThrottledTokenRefreshView(TokenRefreshView):
+    """JWT refresh with rotation; rate-limited per IP."""
+    throttle_classes = [RefreshRateThrottle]
     
     def post(self, request, *args, **kwargs):
         # Check for account lockout before attempting login
@@ -62,12 +74,12 @@ class CustomTokenObtainPairView(TokenObtainPairView):
                 email = request.data.get('email') or request.data.get('username')
                 if email:
                     user = User.objects.get(email=email)
-                    ActivityLog.objects.create(
+                    record_user_activity(
                         user=user,
                         action='login',
                         object_repr=f"Login from {request.META.get('REMOTE_ADDR')}",
                         ip_address=request.META.get('REMOTE_ADDR'),
-                        user_agent=request.META.get('HTTP_USER_AGENT', '')
+                        user_agent=request.META.get('HTTP_USER_AGENT', ''),
                     )
                     user.last_login_ip = request.META.get('REMOTE_ADDR')
                     user.failed_login_attempts = 0
@@ -111,12 +123,12 @@ class RegisterView(generics.CreateAPIView):
                 self.send_verification_email(user)
                 
                 # Log registration
-                ActivityLog.objects.create(
+                record_user_activity(
                     user=user,
                     action='create',
                     object_repr=f"User registration: {user.email}",
                     ip_address=request.META.get('REMOTE_ADDR'),
-                    user_agent=request.META.get('HTTP_USER_AGENT', '')
+                    user_agent=request.META.get('HTTP_USER_AGENT', ''),
                 )
                 
                 response.data['message'] = 'Registration successful! You can now login with your credentials.'
@@ -212,12 +224,12 @@ class LogoutView(APIView):
                 token.blacklist()
             
             # Log logout
-            ActivityLog.objects.create(
+            record_user_activity(
                 user=request.user,
                 action='logout',
                 object_repr=f"Logout from {request.META.get('REMOTE_ADDR')}",
                 ip_address=request.META.get('REMOTE_ADDR'),
-                user_agent=request.META.get('HTTP_USER_AGENT', '')
+                user_agent=request.META.get('HTTP_USER_AGENT', ''),
             )
             
             return Response({'message': 'Successfully logged out'}, status=status.HTTP_200_OK)
@@ -256,12 +268,12 @@ class ChangePasswordView(APIView):
             user.save()
             
             # Log password change
-            ActivityLog.objects.create(
+            record_user_activity(
                 user=user,
                 action='update',
                 object_repr="Password changed",
                 ip_address=request.META.get('REMOTE_ADDR'),
-                user_agent=request.META.get('HTTP_USER_AGENT', '')
+                user_agent=request.META.get('HTTP_USER_AGENT', ''),
             )
             
             return Response({'message': 'Password changed successfully'}, status=status.HTTP_200_OK)
@@ -332,12 +344,12 @@ class PasswordResetConfirmView(APIView):
                     user.save()
                     
                     # Log password reset
-                    ActivityLog.objects.create(
+                    record_user_activity(
                         user=user,
                         action='update',
                         object_repr="Password reset completed",
                         ip_address=request.META.get('REMOTE_ADDR'),
-                        user_agent=request.META.get('HTTP_USER_AGENT', '')
+                        user_agent=request.META.get('HTTP_USER_AGENT', ''),
                     )
                     
                     return Response({'message': 'Password reset successful'}, status=status.HTTP_200_OK)

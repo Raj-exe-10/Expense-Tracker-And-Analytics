@@ -5,8 +5,11 @@ import { store } from './store';
 import { AppProvider } from './context/AppContext';
 import './index.css';
 import App from './App';
+import { appLogger } from './utils/appLogger';
 import './index.css';
 import reportWebVitals from './reportWebVitals';
+
+appLogger.info('app', `LedgerCore frontend started (${process.env.NODE_ENV})`);
 
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement

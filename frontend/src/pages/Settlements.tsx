@@ -537,7 +537,7 @@ const Settlements: React.FC = () => {
   );
 
   return (
-    <Box>
+    <Box sx={{ width: '100%', minWidth: 0 }}>
       {/* Error/Success Alerts */}
       <Snackbar
         open={!!error}
@@ -585,7 +585,7 @@ const Settlements: React.FC = () => {
 
       {/* Summary Cards */}
       <Grid container spacing={{ xs: 1.5, sm: 2, md: 3 }} sx={{ mb: { xs: 2, md: 3 } }}>
-        <Grid item xs={6} sm={6} md={3}>
+        <Grid item xs={6} sm={6} md={3} lg={3}>
           <StatCard
             title="You Owe"
             value={totalOwed}

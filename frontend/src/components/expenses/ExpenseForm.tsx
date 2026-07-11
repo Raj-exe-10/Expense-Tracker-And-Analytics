@@ -632,7 +632,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
-      <Box sx={{ maxWidth: 1400, mx: 'auto', p: { xs: 1, md: 3 } }}>
+      <Box sx={{ width: '100%', maxWidth: '100%', minWidth: 0, p: { xs: 0, md: 1 } }}>
         <form onSubmit={handleSubmit}>
           {/* Success/Error Messages */}
           {successMessage && (

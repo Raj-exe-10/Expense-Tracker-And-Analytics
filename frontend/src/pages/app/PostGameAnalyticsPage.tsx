@@ -22,6 +22,7 @@ import { CashFlowCard } from '../../components/postgame/CashFlowCard';
 import { IntensityHeatmap } from '../../components/postgame/IntensityHeatmap';
 import { BudgetVsActual } from '../../components/postgame/BudgetVsActual';
 import { SmartInsightsList } from '../../components/postgame/SmartInsightsList';
+import { PageHeader } from '../../layout/PageShell';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -51,20 +52,16 @@ const PostGameAnalyticsPage: React.FC = () => {
   };
 
   return (
-    <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2, flexWrap: 'wrap', gap: 2 }}>
-        <Box>
-          <Typography variant="h4" fontWeight={700}>
-            Analytics
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Post-game review: what went right and what to fix
-          </Typography>
-        </Box>
-        <Button startIcon={<Refresh />} onClick={handleRefresh} disabled={loading}>
-          Refresh
-        </Button>
-      </Box>
+    <Box sx={{ width: '100%' }}>
+      <PageHeader
+        title="Analytics"
+        subtitle="Post-game review: what went right and what to fix"
+        actions={
+          <Button startIcon={<Refresh />} onClick={handleRefresh} disabled={loading}>
+            Refresh
+          </Button>
+        }
+      />
 
       <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
         <FormControl size="small" sx={{ minWidth: 160 }}>
@@ -131,8 +128,8 @@ const PostGameAnalyticsPage: React.FC = () => {
           <CircularProgress />
         </Box>
       ) : data ? (
-        <Grid container spacing={2}>
-          <Grid item xs={12} lg={8}>
+        <Grid container spacing={2} alignItems="flex-start">
+          <Grid item xs={12} lg={8} xl={9}>
             {data.cash_flow && (
               <CashFlowCard cashFlow={data.cash_flow} currency={meta?.currency || 'USD'} />
             )}
@@ -141,7 +138,7 @@ const PostGameAnalyticsPage: React.FC = () => {
               <BudgetVsActual rows={data.budget_vs_actual} currency={meta?.currency || 'USD'} />
             )}
           </Grid>
-          <Grid item xs={12} lg={4}>
+          <Grid item xs={12} lg={4} xl={3}>
             <SmartInsightsList insights={data.insights || []} />
             <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
               <Link component={RouterLink} to="/app/analytics">

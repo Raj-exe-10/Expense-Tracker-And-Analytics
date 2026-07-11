@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Box,
   Card,
@@ -42,10 +42,18 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister }) => {
   const navigate = useNavigate();
   const routerLocation = useLocation();
   const { isLoading: loading, error } = useSelector((state: RootState) => state.auth);
-  
+  const submitInFlight = useRef(false);
+
   // Get success message from navigation state
-  const locationState = routerLocation.state as { message?: string; email?: string } | null;
+  const locationState = routerLocation.state as {
+    message?: string;
+    email?: string;
+    sessionExpired?: boolean;
+  } | null;
   const successMessage = locationState?.message;
+  const sessionExpiredMessage = locationState?.sessionExpired
+    ? 'Your session expired. Please sign in again.'
+    : null;
 
   const handleChange = (field: string) => (event: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({
@@ -77,21 +85,23 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister }) => {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    
-    if (!validateForm()) return;
 
+    if (!validateForm() || submitInFlight.current || loading) return;
+
+    submitInFlight.current = true;
     try {
-      const result = await dispatch(loginUser({
-        email: formData.email.trim(),
-        password: formData.password,
-      })).unwrap();
-      
-      // Redirect to dashboard on successful login
-      navigate('/app/home');
+      await dispatch(
+        loginUser({
+          email: formData.email.trim(),
+          password: formData.password,
+        })
+      ).unwrap();
+
+      navigate('/app/home', { replace: true });
     } catch (error: any) {
-      // Error is already handled by the slice and displayed in the error state
-      // Log for debugging
       console.error('Login failed:', error);
+    } finally {
+      submitInFlight.current = false;
     }
   };
 
@@ -111,6 +121,12 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister }) => {
             LedgerCore — access your financial clarity
           </Typography>
         </Box>
+
+        {sessionExpiredMessage && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            {sessionExpiredMessage}
+          </Alert>
+        )}
 
         {successMessage && (
           <Alert severity="success" sx={{ mb: 2 }}>

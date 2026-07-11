@@ -221,7 +221,7 @@ const NotificationsPage: React.FC = () => {
     : readNotifications;
 
   return (
-    <Box sx={{ maxWidth: 1200, mx: 'auto', p: { xs: 2, md: 3 } }}>
+    <Box sx={{ width: '100%', minWidth: 0 }}>
       {/* Header */}
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Box>

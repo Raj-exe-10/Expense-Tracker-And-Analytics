@@ -14,7 +14,7 @@ const intensityColor = (level: number) => {
 };
 
 export const IntensityHeatmap: React.FC<IntensityHeatmapProps> = ({ intensity }) => (
-  <Paper sx={{ p: 2, mb: 2 }}>
+  <Paper sx={{ p: { xs: 2, md: 3 }, mb: 2, width: '100%', overflow: 'hidden' }}>
     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
       <Typography variant="subtitle1" fontWeight={600}>
         Spending Intensity
@@ -32,9 +32,10 @@ export const IntensityHeatmap: React.FC<IntensityHeatmapProps> = ({ intensity })
         No spending data for this period
       </Typography>
     ) : (
-      intensity.rows.map((row) => (
-        <Box key={row.category} sx={{ display: 'flex', alignItems: 'center', mb: 1, gap: 1 }}>
-          <Typography variant="caption" sx={{ width: 72, flexShrink: 0 }}>
+      <Box sx={{ overflowX: 'auto', pb: 1 }}>
+      {intensity.rows.map((row) => (
+        <Box key={row.category} sx={{ display: 'flex', alignItems: 'center', mb: 1, gap: 1, minWidth: 'min-content' }}>
+          <Typography variant="caption" sx={{ width: 88, flexShrink: 0 }}>
             {row.category}
           </Typography>
           {row.cells.map((cell) => (
@@ -50,7 +51,8 @@ export const IntensityHeatmap: React.FC<IntensityHeatmapProps> = ({ intensity })
             />
           ))}
         </Box>
-      ))
+      ))}
+      </Box>
     )}
   </Paper>
 );

@@ -58,7 +58,6 @@ export const PersonalShell: React.FC = () => {
           },
         }}
         topBar={{
-          title: 'LedgerCore',
           showSearch: true,
           onSearchClick: () => navigate('/search'),
           onNotificationsClick: () => navigate('/app/notifications'),
@@ -74,7 +73,7 @@ export const PersonalShell: React.FC = () => {
         variant="sticky"
         onNotificationsClick={() => navigate('/app/notifications')}
       />
-      <Box sx={{ width: '100%', px: 2, pt: 2 }}>
+      <Box sx={{ width: '100%', maxWidth: '100%', minWidth: 0, px: 2, pt: 2, pb: 2, boxSizing: 'border-box' }}>
         <Outlet />
       </Box>
       <BottomNav items={mobileNavItems} />

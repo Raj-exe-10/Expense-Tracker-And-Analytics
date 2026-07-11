@@ -1,51 +1,34 @@
 """
-API Logging Middleware
-Logs all API requests and responses for monitoring and debugging
+API request logging: database (admin UI) + console trace (dev monitoring).
 """
 import logging
 import time
-import json
+
 from django.utils.deprecation import MiddlewareMixin
+
+from .system_logging import record_http_request
 
 logger = logging.getLogger('api')
 
 
 class APILoggingMiddleware(MiddlewareMixin):
-    """Log all API requests and responses"""
-    
+    """Record API traffic to SystemLog and console."""
+
     def process_request(self, request):
-        request.start_time = time.time()
-        if request.path.startswith('/api/'):
-            logger.info(
-                f"API Request: {request.method} {request.path}",
-                extra={
-                    'method': request.method,
-                    'path': request.path,
-                    'user': str(request.user) if hasattr(request, 'user') and request.user.is_authenticated else 'Anonymous',
-                    'ip': self.get_client_ip(request),
-                }
-            )
-    
+        request._api_start_time = time.perf_counter()
+
     def process_response(self, request, response):
-        if request.path.startswith('/api/'):
-            duration = time.time() - getattr(request, 'start_time', 0)
-            logger.info(
-                f"API Response: {request.method} {request.path} - {response.status_code}",
-                extra={
-                    'method': request.method,
-                    'path': request.path,
-                    'status_code': response.status_code,
-                    'duration': duration,
-                    'user': str(request.user) if hasattr(request, 'user') and request.user.is_authenticated else 'Anonymous',
-                }
-            )
+        if not request.path.startswith('/api/'):
+            return response
+        if request.method == 'OPTIONS':
+            return response
+
+        start = getattr(request, '_api_start_time', None)
+        duration_ms = int((time.perf_counter() - start) * 1000) if start else 0
+
+        try:
+            record_http_request(request=request, response=response, duration_ms=duration_ms)
+        except Exception:
+            logger.exception('SystemLog middleware failed')
+
         return response
-    
-    def get_client_ip(self, request):
-        """Extract client IP address from request"""
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0].strip()
-        else:
-            ip = request.META.get('REMOTE_ADDR')
-        return ip

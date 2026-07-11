@@ -220,3 +220,51 @@ class ActivityLog(TimeStampedModel):
     def __str__(self):
         user_name = self.user.get_full_name() if self.user else 'System'
         return f"{user_name} {self.get_action_display()} {self.object_repr} at {self.created_at}"
+
+
+class SystemLog(TimeStampedModel):
+    """Unified audit / health log for admin monitoring (HTTP, auth, user actions)."""
+
+    LEVELS = [
+        ('debug', 'Debug'),
+        ('info', 'Info'),
+        ('warning', 'Warning'),
+        ('error', 'Error'),
+        ('critical', 'Critical'),
+    ]
+    CATEGORIES = [
+        ('http', 'HTTP Request'),
+        ('auth', 'Authentication'),
+        ('user_activity', 'User Activity'),
+        ('system', 'System'),
+        ('security', 'Security'),
+    ]
+
+    level = models.CharField(max_length=10, choices=LEVELS, default='info', db_index=True)
+    category = models.CharField(max_length=20, choices=CATEGORIES, default='system', db_index=True)
+    message = models.CharField(max_length=500)
+    user = models.ForeignKey(
+        'authentication.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='system_logs',
+    )
+    request_method = models.CharField(max_length=10, blank=True)
+    request_path = models.CharField(max_length=255, blank=True, db_index=True)
+    status_code = models.PositiveSmallIntegerField(null=True, blank=True)
+    duration_ms = models.PositiveIntegerField(null=True, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        db_table = 'system_logs'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['-created_at', 'category']),
+            models.Index(fields=['level', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f"[{self.level}] {self.message[:80]}"

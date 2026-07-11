@@ -4,13 +4,11 @@ import {
   Dashboard,
   Receipt,
   FactCheck,
+  ListAlt,
   Business,
   Assessment,
   FileUpload,
   Settings,
-  Notifications,
-  Security,
-  AdminPanelSettings,
 } from '@mui/icons-material';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { BottomNav, NavItem } from './BottomNav';
@@ -24,6 +22,7 @@ const sidebarItems: SidebarNavItem[] = [
   { label: 'Dashboard', path: '/admin', icon: <Dashboard /> },
   { label: 'Ledger', path: '/admin/ledger', icon: <Receipt />, matchPrefix: true },
   { label: 'Audit Trails', path: '/admin/audit', icon: <FactCheck /> },
+  { label: 'System Logs', path: '/admin/logs', icon: <ListAlt /> },
   { label: 'Entities', path: '/admin/entities', icon: <Business />, matchPrefix: true },
   { label: 'Reports', path: '/admin/reports', icon: <Assessment /> },
   { label: 'Export Control', path: '/admin/export', icon: <FileUpload /> },
@@ -34,10 +33,10 @@ const footerItems: SidebarNavItem[] = [
 ];
 
 const mobileNav: NavItem[] = [
+  { label: 'Home', path: '/admin', icon: <Dashboard /> },
+  { label: 'Logs', path: '/admin/logs', icon: <ListAlt /> },
   { label: 'Ledger', path: '/admin/ledger', icon: <Receipt /> },
-  { label: 'Alerts', path: '/admin/alerts', icon: <Notifications /> },
-  { label: 'Vault', path: '/admin/vault', icon: <Security /> },
-  { label: 'Admin', path: '/admin', icon: <AdminPanelSettings /> },
+  { label: 'More', path: '/admin/settings', icon: <Settings /> },
 ];
 
 export const AdminShell: React.FC = () => {
@@ -48,7 +47,17 @@ export const AdminShell: React.FC = () => {
     return (
       <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', pb: 10 }}>
         <AppTopBar title="LedgerCore Admin" variant="sticky" showNotifications={false} />
-        <Box sx={{ width: '100%', px: 2, pt: 2 }}>
+        <Box
+          sx={{
+            width: '100%',
+            maxWidth: '100%',
+            minWidth: 0,
+            px: { xs: 1.5, sm: 2 },
+            pt: 2,
+            pb: 2,
+            boxSizing: 'border-box',
+          }}
+        >
           <Outlet />
         </Box>
         <BottomNav items={mobileNav} />
@@ -68,7 +77,6 @@ export const AdminShell: React.FC = () => {
           showAvatar: true,
         }}
         topBar={{
-          title: 'LedgerCore',
           showSearch: true,
           showNotifications: false,
           onSearchClick: () => navigate('/search'),

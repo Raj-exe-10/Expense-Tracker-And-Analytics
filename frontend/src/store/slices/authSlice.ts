@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { authAPI } from '../../services/api';
 import { tokenStorage } from '../../utils/storage';
+import { appLogger } from '../../utils/appLogger';
 
 export interface User {
   id: number;
@@ -33,7 +34,7 @@ const initialState: AuthState = {
   token: tokenStorage.getAccessToken(),
   refreshToken: tokenStorage.getRefreshToken(),
   isLoading: false,
-  isInitialized: false,
+  isInitialized: !tokenStorage.hasTokens(),
   error: null,
   isAuthenticated: false,
 };
@@ -179,6 +180,16 @@ const authSlice = createSlice({
     clearError: (state) => {
       state.error = null;
     },
+    clearSession: (state) => {
+      tokenStorage.clearTokens();
+      state.user = null;
+      state.token = null;
+      state.refreshToken = null;
+      state.isAuthenticated = false;
+      state.isLoading = false;
+      state.isInitialized = true;
+      state.error = null;
+    },
     setTokens: (state, action: PayloadAction<{ access: string; refresh: string }>) => {
       state.token = action.payload.access;
       state.refreshToken = action.payload.refresh;
@@ -200,6 +211,7 @@ const authSlice = createSlice({
         state.user = action.payload.user;
         state.isAuthenticated = true;
         state.error = null;
+        appLogger.auth('Login successful', { email: action.payload.user?.email });
       })
       .addCase(login.rejected, (state, action) => {
         state.isLoading = false;
@@ -283,10 +295,18 @@ const authSlice = createSlice({
       .addCase(checkAuthStatus.fulfilled, (state, action) => {
         state.isLoading = false;
         state.isInitialized = true;
-        state.user = action.payload;
-        state.isAuthenticated = true;
-        state.token = tokenStorage.getAccessToken();
-        state.refreshToken = tokenStorage.getRefreshToken();
+        if (action.payload) {
+          state.user = action.payload;
+          state.isAuthenticated = true;
+          state.token = tokenStorage.getAccessToken();
+          state.refreshToken = tokenStorage.getRefreshToken();
+          appLogger.auth('Session restored', { email: action.payload.email });
+        } else {
+          state.user = null;
+          state.isAuthenticated = false;
+          state.token = null;
+          state.refreshToken = null;
+        }
       })
       .addCase(checkAuthStatus.rejected, (state, action) => {
         state.isLoading = false;
@@ -310,18 +330,17 @@ const authSlice = createSlice({
 export const checkAuthStatus = createAsyncThunk(
   'auth/checkAuthStatus',
   async (_, { rejectWithValue }) => {
-    try {
-      const token = tokenStorage.getAccessToken();
-      if (!token) {
-        throw new Error('No token found');
+    if (!tokenStorage.hasTokens()) {
+      if (tokenStorage.getAccessToken() || tokenStorage.getRefreshToken()) {
+        tokenStorage.clearTokens();
       }
-      
-      // Verify token and get user data
-      const response = await authAPI.getProfile();
-      return response;
+      return null;
+    }
+
+    try {
+      return await authAPI.getProfile();
     } catch (error: any) {
       const status = error.response?.status;
-      // Only clear session on auth failures — not rate limits or server errors
       if (status === 401 || status === 403) {
         tokenStorage.clearTokens();
       }
@@ -337,5 +356,5 @@ export const checkAuthStatus = createAsyncThunk(
 export const loginUser = login;
 export const registerUser = register;
 
-export const { clearError, setTokens } = authSlice.actions;
+export const { clearError, clearSession, setTokens } = authSlice.actions;
 export default authSlice.reducer;

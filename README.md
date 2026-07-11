@@ -115,6 +115,18 @@ cd frontend && npm test
 ## API Documentation
 - Swagger UI: http://localhost:8000/api/docs/
 - ReDoc: http://localhost:8000/api/redoc/
+- Human docs index (architecture, diagrams, glossary, feature status): [`docs/README.md`](docs/README.md)
+
+## For AI agents
+
+Agent-oriented guidance lives in:
+
+- [`AGENTS.md`](AGENTS.md) — entry point
+- [`docs/agent-kb/`](docs/agent-kb/) — curated knowledge base
+- [`.cursor/rules/`](.cursor/rules/) — always-on / path-scoped rules
+- [`.cursor/skills/`](.cursor/skills/) — workflows (`verify-and-fix`, `write-tests`, etc.)
+
+Prefer `docs/agent-kb/` over the longer human guides under `docs/` unless you need full reference material.
 
 ## Contributing
 1. Fork the repository

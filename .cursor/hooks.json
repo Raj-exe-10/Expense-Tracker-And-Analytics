@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "hooks": {
+    "stop": [
+      {
+        "type": "prompt",
+        "prompt": "You are a stop hook for the LedgerCore repo. If this session made non-trivial code edits under backend/ or frontend/ and there is no clear evidence that verify-and-fix already ran successfully (tsc/manage.py check/tests and/or Bugbot), return a followup_message telling the agent to run the verify-and-fix skill now before finishing. If the session was docs-only, Q&A, review-only, or verification already passed, allow stop with no followup. Keep any followup to 2 short sentences.",
+        "loop_limit": 1
+      }
+    ]
+  }
+}

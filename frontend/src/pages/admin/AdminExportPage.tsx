@@ -19,7 +19,7 @@ const AdminExportPage: React.FC = () => {
   };
 
   return (
-    <Box sx={{ maxWidth: 900 }}>
+    <Box sx={{ width: '100%', maxWidth: 1200 }}>
       <Typography variant="h5" fontWeight={700} gutterBottom>Export Control</Typography>
       <TextField label="From" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} sx={{ mr: 2 }} InputLabelProps={{ shrink: true }} />
       <TextField label="To" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} InputLabelProps={{ shrink: true }} />

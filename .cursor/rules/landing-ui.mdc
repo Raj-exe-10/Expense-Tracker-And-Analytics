@@ -1,0 +1,13 @@
+---
+description: Landing page design constraints for LedgerCore marketing surfaces
+globs: frontend/src/pages/landing/**
+alwaysApply: false
+---
+
+# Landing UI
+
+- Tokens/fonts: `frontend/src/pages/landing/landingTokens.ts`. Keep brand-first hero; do not overpower the brand with a competing headline.
+- Prefer existing Desktop/Mobile landing sections and components under `pages/landing/`.
+- Avoid generic AI-default looks (purple gradients, warm cream + terracotta serif broadsheet).
+- No card-heavy heroes; one job per section. Match existing motion/atmosphere patterns.
+- Do not mix app dark `ledgerCoreTheme` into marketing pages unless intentionally shared.

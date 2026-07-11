@@ -1,0 +1,14 @@
+---
+description: LedgerCore project identity, layout, and agent navigation defaults
+alwaysApply: true
+---
+
+# LedgerCore project overview
+
+- Product brand in UI: **LedgerCore**. Monorepo: `backend/` (Django/DRF), `frontend/` (React/MUI/Redux).
+- Agent docs: `docs/agent-kb/` (prefer for agent work). Human diagrams: `docs/README.md`. `docs/archive/` is historical only. Entry: `AGENTS.md`.
+- UI “Squad” = backend **Group** (`/api/groups/`, `groupsAPI`).
+- Three SPA zones: `/app` PersonalShell, `/search` SearchShell, `/admin` AdminShell (admin roles only).
+- HTTP only via `frontend/src/services/api.ts` `*API` modules; register backend routes in the owning app.
+- After non-trivial code edits: run skill `verify-and-fix`. For new behavior: skill `write-tests`.
+- See `docs/agent-kb/known-pitfalls.md` and `docs/agent-kb/do-not.md`.

@@ -467,9 +467,9 @@ const Groups: React.FC = () => {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ width: '100%' }}>
       {/* Header */}
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+      <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={4} flexWrap="wrap" gap={2}>
         <Box>
           <Typography variant="h4" fontWeight="bold" gutterBottom>
             Groups
@@ -506,7 +506,7 @@ const Groups: React.FC = () => {
             const isAdmin = group.user_role === 'admin';
             
             return (
-              <Grid item xs={12} sm={6} md={4} key={group.id}>
+              <Grid item xs={12} sm={6} md={4} lg={4} xl={3} key={group.id}>
                 <Card 
                   sx={{ 
                     height: '100%', 

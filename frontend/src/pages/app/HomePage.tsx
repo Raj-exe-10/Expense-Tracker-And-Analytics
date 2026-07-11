@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Box,
   Typography,
@@ -21,8 +21,12 @@ export const HomePage: React.FC = () => {
   const [data, setData] = useState<any>(null);
   const [pending, setPending] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const loadStarted = useRef(false);
 
   useEffect(() => {
+    if (loadStarted.current) return;
+    loadStarted.current = true;
+
     Promise.allSettled([dashboardAPI.getHome(), paymentRequestsAPI.pendingForMe()])
       .then(([homeResult, prResult]) => {
         if (homeResult.status === 'fulfilled') {
@@ -115,7 +119,7 @@ export const HomePage: React.FC = () => {
   );
 
   return (
-    <Box>
+    <Box sx={{ width: '100%', minWidth: 0 }}>
       <Typography variant="h4" fontWeight={700} gutterBottom>
         Good morning, {data.greeting_name}
       </Typography>
@@ -148,18 +152,14 @@ export const HomePage: React.FC = () => {
         </LcCard>
       ))}
 
-      <Grid container spacing={2}>
-        <Grid item xs={12} lg={6}>
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={6} lg={12}>
-              {balanceCard}
-            </Grid>
-            <Grid item xs={12} md={6} lg={12}>
-              {safeToSpendCard}
-            </Grid>
-          </Grid>
+      <Grid container spacing={2} alignItems="stretch">
+        <Grid item xs={12} md={6} xl={4}>
+          {balanceCard}
         </Grid>
-        <Grid item xs={12} lg={6}>
+        <Grid item xs={12} md={6} xl={4}>
+          {safeToSpendCard}
+        </Grid>
+        <Grid item xs={12} xl={4}>
           {recentCard}
         </Grid>
       </Grid>

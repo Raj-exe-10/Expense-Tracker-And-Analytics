@@ -1,5 +1,11 @@
 import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
 import { tokenStorage } from '../utils/storage';
+import { appLogger } from '../utils/appLogger';
+import {
+  isAuthNoRefreshUrl,
+  notifySessionExpired,
+  refreshAccessToken,
+} from './authSession';
 
 const BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
@@ -11,9 +17,10 @@ const api = axios.create({
   },
 });
 
-// Request interceptor to add auth token
+// Request interceptor to add auth token + timing for logs
 api.interceptors.request.use(
   (config: AxiosRequestConfig | any) => {
+    config.metadata = { startTime: Date.now() };
     const token = tokenStorage.getAccessToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -25,42 +32,56 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor for token refresh
-api.interceptors.response.use(
-  (response: AxiosResponse) => response,
-  async (error) => {
-    const originalRequest = error.config;
+const logApiResult = (config: AxiosRequestConfig | undefined, status: number) => {
+  if (!config?.url) return;
+  const start = (config as AxiosRequestConfig & { metadata?: { startTime?: number } }).metadata
+    ?.startTime;
+  const durationMs = start ? Date.now() - start : undefined;
+  const url = `${config.baseURL || ''}${config.url}`;
+  appLogger.api(config.method?.toUpperCase() || 'GET', url, status, durationMs);
+};
 
-    // Do not retry or redirect on rate limit — avoids auth logout loops
+// Response interceptor: single shared refresh, no full-page reloads
+api.interceptors.response.use(
+  (response: AxiosResponse) => {
+    logApiResult(response.config, response.status);
+    return response;
+  },
+  async (error) => {
+    const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean };
+
+    if (error.response) {
+      logApiResult(error.config, error.response.status);
+    } else if (error.config) {
+      appLogger.error('HTTP', `${error.config.method} ${error.config.url} failed`, error.message);
+    }
+
     if (error.response?.status === 429) {
       return Promise.reject(error);
     }
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-
-      const refreshToken = tokenStorage.getRefreshToken();
-      if (refreshToken) {
-        try {
-          const response = await axios.post(`${BASE_URL}/api/auth/token/refresh/`, {
-            refresh: refreshToken,
-          });
-
-          const { access } = response.data;
-          tokenStorage.setAccessToken(access);
-
-          // Retry original request with new token
-          originalRequest.headers.Authorization = `Bearer ${access}`;
-          return api(originalRequest);
-        } catch (refreshError) {
-          // Refresh failed, redirect to login
-          tokenStorage.clearTokens();
-          window.location.href = '/login';
-          return Promise.reject(refreshError);
-        }
-      }
+    if (error.response?.status !== 401 || !originalRequest || originalRequest._retry) {
+      return Promise.reject(error);
     }
 
+    const requestUrl = String(originalRequest.url || '');
+
+    if (isAuthNoRefreshUrl(requestUrl)) {
+      if (requestUrl.includes('/auth/token/refresh/')) {
+        notifySessionExpired();
+      }
+      return Promise.reject(error);
+    }
+
+    originalRequest._retry = true;
+    const access = await refreshAccessToken();
+    if (access) {
+      originalRequest.headers = originalRequest.headers || {};
+      (originalRequest.headers as Record<string, string>).Authorization = `Bearer ${access}`;
+      return api(originalRequest);
+    }
+
+    notifySessionExpired();
     return Promise.reject(error);
   }
 );
@@ -460,6 +481,13 @@ export const securityAPI = {
   setAppLockPin: (pin: string, use_biometric?: boolean) =>
     api.post('/auth/security/app-lock/', { pin, use_biometric }).then(res => res.data),
   deleteAccount: () => api.post('/auth/security/delete-account/').then(res => res.data),
+};
+
+export const systemLogsAPI = {
+  list: (params?: Record<string, string | number>) =>
+    api.get('/core/system-logs/', { params }).then((res) => res.data),
+  stats: () => api.get('/core/system-logs/stats/').then((res) => res.data),
+  get: (id: string) => api.get(`/core/system-logs/${id}/`).then((res) => res.data),
 };
 
 export const enterpriseAPI = {
