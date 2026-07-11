@@ -18,6 +18,11 @@ Skip pure Q&A or tiny typos with no real change.
 
 ## 2026-07-11
 
+- **[agent]** Ponytail lazy-senior always-on rule
+  - Note: Added project-only Cursor rule for YAGNI/reuse-first / minimal diffs; tests defer to write-tests + verify-and-fix (not assert demos).
+  - Areas: `.cursor/rules/ponytail.mdc`
+  - Commit: uncommitted
+
 - **[agent]** Skills + agent-kb updated after audit remediation
   - Note: Captured sync IDOR/OCC, privilege-field, settlement FIFO, JWT blacklist, CORS, and offline-queue invariants in skills and agent-kb so agents do not reintroduce fixed vulns.
   - Areas: `.cursor/skills/{offline-sync,add-api-endpoint,expense-tracker-dev}/`, `docs/agent-kb/{known-pitfalls,permissions,do-not,offline-sync,auth-and-roles,settlements}.md`
