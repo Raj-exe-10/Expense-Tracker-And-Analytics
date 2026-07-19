@@ -2,6 +2,8 @@
 
 Curated, code-accurate reference for AI agents. Prefer these files over the longer human docs in `docs/` unless the user asks for full guides.
 
+**SDD pipeline** (Cursor ↔ OpenCode parity): see [`AGENTS.md`](../../AGENTS.md) — skill `feature-workflow`, Spec Kit under `.opencode/skills/speckit-*` (mirrored to `.cursor/skills/speckit-*`), graphify before explore, Superpowers during implement, `verify-and-fix` before done. Constitution: [`.specify/memory/constitution.md`](../../.specify/memory/constitution.md).
+
 | File | Use when |
 |------|----------|
 | [architecture.md](architecture.md) | Orienting on stack, apps, shells |

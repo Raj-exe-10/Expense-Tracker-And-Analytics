@@ -121,10 +121,15 @@ cd frontend && npm test
 
 Agent-oriented guidance lives in:
 
-- [`AGENTS.md`](AGENTS.md) — entry point
+- [`AGENTS.md`](AGENTS.md) — entry point (preferred pipeline: **graphify → Spec Kit → Superpowers → verify**)
 - [`docs/agent-kb/`](docs/agent-kb/) — curated knowledge base
-- [`.cursor/rules/`](.cursor/rules/) — always-on / path-scoped rules
-- [`.cursor/skills/`](.cursor/skills/) — workflows (`verify-and-fix`, `write-tests`, etc.)
+- [`.specify/memory/constitution.md`](.specify/memory/constitution.md) — Spec Kit constitution
+- [`.cursor/rules/`](.cursor/rules/) — always-on / path-scoped rules (includes SDD + graphify)
+- [`.cursor/skills/`](.cursor/skills/) — LedgerCore domain skills + mirrored `speckit-*` + `feature-workflow`
+- [`.opencode/skills/`](.opencode/skills/) — canonical Spec Kit skills + OpenCode `feature-workflow`
+- [`.opencode/opencode.json`](.opencode/opencode.json) — OpenCode plugins (graphify, Superpowers)
+
+**Cursor:** install Superpowers from the marketplace (`obra/superpowers`) once. **OpenCode:** Superpowers is already listed as a plugin.
 
 Prefer `docs/agent-kb/` over the longer human guides under `docs/` unless you need full reference material.
 

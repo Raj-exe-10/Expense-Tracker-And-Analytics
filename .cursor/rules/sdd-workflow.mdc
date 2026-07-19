@@ -1,0 +1,18 @@
+---
+description: Spec-driven workflow routing — graphify → Spec Kit → Superpowers → verify
+alwaysApply: true
+---
+
+# SDD workflow (Cursor ↔ OpenCode parity)
+
+For user requests that are **new features or non-trivial product changes**:
+
+1. Follow skill `feature-workflow` to choose full Spec Kit, short Spec Kit, or bypass.
+2. Orient with **graphify** (`query` / `path` / `explain`) before broad codebase exploration.
+3. Build specs/plans/tasks with `speckit-*` skills (available under `.cursor/skills/speckit-*` and `.opencode/skills/speckit-*`).
+4. Implement with **Superpowers** (TDD / plan execution / review) plus LedgerCore domain skills.
+5. Finish with `verify-and-fix`, `graphify update .` after code changes, and `docs/tracker.md`.
+
+**Bypass Spec Kit** only for obvious bugfixes, one-liner UI tweaks, or docs-only work — still use graphify when exploring code and `verify-and-fix` for non-trivial edits.
+
+Do not add a second competing SDLC skill framework. Constitution: `.specify/memory/constitution.md`.

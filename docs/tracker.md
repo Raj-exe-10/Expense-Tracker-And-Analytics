@@ -16,6 +16,20 @@ Skip pure Q&A or tiny typos with no real change.
 
 ---
 
+## 2026-07-19
+
+- **[agent]** Cursor ↔ OpenCode Spec Kit + graphify + Superpowers parity
+  - Note: Filled LedgerCore constitution; added graphify/agent-kb preflight to all speckit skills; mirrored 10 `speckit-*` skills into `.cursor/skills/`; added `feature-workflow` router (both agents) and `.cursor/rules/sdd-workflow.mdc`; documented Superpowers install (OpenCode plugin + Cursor marketplace) in AGENTS.md / README / agent-kb.
+  - Areas: `.specify/memory/constitution.md`, `.opencode/skills/`, `.cursor/skills/`, `.cursor/rules/sdd-workflow.mdc`, `AGENTS.md`, `README.md`, `docs/agent-kb/README.md`
+  - Commit: uncommitted
+
+## 2026-07-18
+
+- **[agent]** Integrated speckit + superpowers with existing graphify
+  - Note: Installed specify CLI (v0.13.0), created `.specify/` structure with templates/scripts/memory, created 10 speckit skills in `.opencode/skills/speckit-*/` (constitution, specify, clarify, plan, checklist, tasks, analyze, implement, converge, taskstoissues), added superpowers plugin to `.opencode/opencode.json`
+  - Areas: `.specify/`, `.opencode/skills/speckit-*/`, `.opencode/opencode.json`
+  - Commit: uncommitted
+
 ## 2026-07-11
 
 - **[agent]** Ponytail lazy-senior always-on rule

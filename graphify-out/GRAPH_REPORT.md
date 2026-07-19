@@ -1,16 +1,16 @@
-# Graph Report - Expense-Tracker-And-Analytics  (2026-07-15)
+# Graph Report - Expense-Tracker-And-Analytics  (2026-07-18)
 
 ## Corpus Check
-- 327 files · ~139,726 words
+- 355 files · ~171,727 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2558 nodes · 4477 edges · 266 communities (196 shown, 70 thin omitted)
-- Extraction: 81% EXTRACTED · 19% INFERRED · 0% AMBIGUOUS · INFERRED: 845 edges (avg confidence: 0.51)
+- 2726 nodes · 4625 edges · 281 communities (222 shown, 59 thin omitted)
+- Extraction: 82% EXTRACTED · 18% INFERRED · 0% AMBIGUOUS · INFERRED: 845 edges (avg confidence: 0.51)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `c6e42d99`
+- Built from commit: `56057909`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -238,6 +238,18 @@
 - @types/react-dom
 - typescript
 - theme
+- Webhooks
+- Data Types & Constraints
+- Monitoring & Logging
+- Technology Stack
+- create-new-feature.ps1
+- Base URL & Versioning
+- Pagination
+- Database Maintenance
+- graphify.js
+- check-prerequisites.sh
+- setup-plan.sh
+- setup-tasks.sh
 
 ## God Nodes (most connected - your core abstractions)
 1. `TimeStampedModel` - 46 edges
@@ -266,35 +278,35 @@
 ## Import Cycles
 - 1-file cycle: `backend/config/celery.py -> backend/config/celery.py`
 
-## Communities (266 total, 70 thin omitted)
+## Communities (281 total, 59 thin omitted)
 
 ### Community 0 - "User"
 Cohesion: 0.06
-Nodes (73): AbstractUser, AnonRateThrottle, EmailVerification, Meta, Extended user profile information, Model to handle friendships between users, Custom User model extending Django's AbstractUser, Model to handle email verification tokens (+65 more)
+Nodes (72): AbstractUser, AnonRateThrottle, EmailVerification, Meta, Extended user profile information, Model to handle friendships between users, Custom User model extending Django's AbstractUser, Model to handle email verification tokens (+64 more)
 
 ### Community 1 - "post_game_service.py"
 Cohesion: 0.05
 Nodes (48): notify_critical_insights(), Create in-app notifications for critical post-game insights., Dedupe: one notification per insight_key per 24h., generate_rule_insights(), merge_insights(), _prev_month(), Rule-based post-game insights., Dedupe by insight_key, rank by severity. (+40 more)
 
 ### Community 2 - "api.ts"
-Cohesion: 0.06
-Nodes (33): RecurringExpense, RecurringExpensesList(), LcCard(), ConflictItem, HomePage(), PeoplePage(), SettlementReportsPage(), Budget() (+25 more)
+Cohesion: 0.05
+Nodes (32): RecurringExpense, RecurringExpensesList(), LcCard(), ConflictItem, HomePage(), PeoplePage(), SettlementReportsPage(), Budget() (+24 more)
 
 ### Community 3 - "localeCurrency.ts"
 Cohesion: 0.09
 Nodes (39): currencyFromQuery(), useLandingLocale(), VALID_CURRENCIES, buildLinkPath(), CashFlowSankey(), CashFlowSankeyProps, HeroDashboardPreview(), HeroDashboardPreviewProps (+31 more)
 
 ### Community 4 - "AdminShell.tsx"
-Cohesion: 0.08
-Nodes (35): statusColor, StatusDot(), AdminShell(), footerItems, mobileNav, sidebarItems, AppSidebar(), AppSidebarProps (+27 more)
+Cohesion: 0.07
+Nodes (39): BudgetVsActual(), Row, CashFlowCard(), CashFlowCardProps, intensityColor(), IntensityHeatmap(), IntensityHeatmapProps, iconFor() (+31 more)
 
 ### Community 5 - "Notification"
-Cohesion: 0.06
-Nodes (29): Meta, Notification, NotificationLog, NotificationPreference, NotificationTemplate, Model for user notifications, Mark notification as read, Mark notification as sent (+21 more)
+Cohesion: 0.05
+Nodes (32): Meta, Notification, NotificationLog, NotificationPreference, NotificationTemplate, Model for user notifications, Mark notification as read, Mark notification as sent (+24 more)
 
 ### Community 6 - "useAppSelector"
-Cohesion: 0.07
-Nodes (33): ExpenseList(), ExpenseListProps, FinancialSettingsCard(), useAppContext(), useAppDispatch(), useAppSelector, AdminLedgerPage(), Expenses() (+25 more)
+Cohesion: 0.10
+Nodes (27): ExpenseList(), ExpenseListProps, FinancialSettingsCard(), useAppContext(), useAppDispatch(), useAppSelector, AdminLedgerPage(), PostGameAnalyticsPage() (+19 more)
 
 ### Community 7 - "Currency"
 Cohesion: 0.17
@@ -305,24 +317,24 @@ Cohesion: 0.05
 Nodes (37): AddExpensePage, AdminAlertsPage, AdminAuditPage, AdminDashboard, AdminEntitiesPage, AdminExportPage, AdminLedgerPage, AdminReportsPage (+29 more)
 
 ### Community 9 - "ExpenseShare"
-Cohesion: 0.10
-Nodes (26): ExpenseComment, ExpenseShare, Model representing a user's share of an expense, Check if this share is owed by the user (user didn't pay), Net amount (positive if owed to user, negative if owed by user), Model for managing recurring expenses, Get the next due date (alias for next_due_date field), Model for comments on expenses (+18 more)
+Cohesion: 0.12
+Nodes (23): Abstract base class that provides UUID primary key, UUIDModel, ExpenseComment, ExpenseShare, Model representing a user's share of an expense, Check if this share is owed by the user (user didn't pay), Net amount (positive if owed to user, negative if owed by user), Model for managing recurring expenses (+15 more)
 
 ### Community 10 - "WalletAllocation"
 Cohesion: 0.13
-Nodes (17): Per-month allocation for a wallet: limit (regular) or monthly contribution (sink, Assigns a system category to a wallet. Every category belongs to exactly one wal, WalletAllocation, WalletCategory, UserCategorySerializer, WalletAdjustmentSerializer, WalletAllocationSerializer, WalletAllocationWriteSerializer (+9 more)
+Nodes (20): Assigns a system category to a wallet. Every category belongs to exactly one wal, WalletCategory, UserCategorySerializer, WalletAdjustmentSerializer, WalletAllocationSerializer, WalletAllocationWriteSerializer, WalletCategorySerializer, WalletSerializer (+12 more)
 
 ### Community 11 - "Entity"
 Cohesion: 0.16
 Nodes (14): AuditEvent, Entity, ExportJob, Meta, IsEnterpriseAdmin, AuditEventSerializer, EntitySerializer, ExportJobSerializer (+6 more)
 
 ### Community 12 - "ExpenseViewSet"
-Cohesion: 0.07
-Nodes (18): Convert Decimal fields to float for JSON serialization, Lightweight serializer for list endpoints — excludes nested shares,     comments, SimpleExpenseSerializer, ExpenseViewSet, Mark expense as settled, Split expense equally among selected users., Split expense by specific amounts., Split expense by percentages. (+10 more)
+Cohesion: 0.13
+Nodes (13): ExpenseShareSerializer, ExpenseViewSet, Split expense equally among selected users., Split expense by specific amounts., Split expense by percentages., Return the set of valid active-member user IDs, or an error Response.      For g, Get expense statistics for the current user - optimized version, Get comments for an expense (+5 more)
 
 ### Community 13 - "Expense"
-Cohesion: 0.08
-Nodes (17): Expense Filter Mixin Provides reusable filtering logic for expense queries, Expense, Meta, Validate receipt file size (max 5MB), Create expense shares based on split type, Validate receipt file extension, Create shares for group expenses based on split type., Get total amount of all shares (+9 more)
+Cohesion: 0.09
+Nodes (15): Expense Filter Mixin Provides reusable filtering logic for expense queries, Expense, Meta, Validate receipt file size (max 5MB), Create expense shares based on split type, Validate receipt file extension, Create shares for group expenses based on split type., Get total amount of all shares (+7 more)
 
 ### Community 14 - "TimeStampedModel"
 Cohesion: 0.09
@@ -334,7 +346,7 @@ Nodes (30): 1.1 SQL Injection Risk in Query Parameters, 1.2 XSS Vulnerability in
 
 ### Community 16 - "groupSlice.ts"
 Cohesion: 0.16
-Nodes (26): Group, GROUP_TYPES, GroupMember, Groups(), SearchedUser, Groups(), fetchCurrencies, addMember (+18 more)
+Nodes (27): Group, GROUP_TYPES, GroupMember, Groups(), SearchedUser, Groups(), fetchCurrencies, addMember (+19 more)
 
 ### Community 17 - "views.py"
 Cohesion: 0.13
@@ -342,47 +354,47 @@ Nodes (24): generate_csv_export(), generate_pdf_export(), Utility functions for 
 
 ### Community 18 - "views.py"
 Cohesion: 0.13
-Nodes (24): apply_rollover(), check_wallet_alerts(), ensure_monthly_budget(), ensure_sinking_contribution(), get_adjustments_total(), get_spent_for_wallet_allocation(), get_wallet_for_expense(), process_expense_deduction() (+16 more)
+Nodes (19): check_wallet_alerts(), ensure_sinking_contribution(), get_adjustments_total(), get_spent_for_wallet_allocation(), get_wallet_for_expense(), process_expense_deduction(), process_expense_refund(), Budget services: deduction, rollover, sinking fund, alerts. (+11 more)
 
 ### Community 19 - "ExpenseForm.tsx"
-Cohesion: 0.13
-Nodes (19): dompurify, dompurify, ExpenseForm(), ExpenseFormProps, ExpenseShare, GroupMember, ExpenseDetail(), expensesAPI (+11 more)
+Cohesion: 0.14
+Nodes (15): ExpenseForm(), ExpenseFormProps, ExpenseShare, GroupMember, ExpenseDetail(), paths, createExpense, deleteExpense (+7 more)
 
 ### Community 20 - "MonthlyBudget"
-Cohesion: 0.16
-Nodes (19): MonthlyBudgetAdmin, UserCategoryAdmin, WalletAdjustmentAdmin, WalletAdmin, WalletAllocationAdmin, WalletCategoryAdmin, MonthlyBudget, Total monthly budget cap for a user (year/month). (+11 more)
+Cohesion: 0.22
+Nodes (15): MonthlyBudgetAdmin, UserCategoryAdmin, WalletAdjustmentAdmin, WalletAdmin, WalletAllocationAdmin, WalletCategoryAdmin, User-level wallet (envelope). Each wallet has a monthly limit or is a sinking fu, Per-month allocation for a wallet: limit (regular) or monthly contribution (sink (+7 more)
 
 ### Community 21 - "models.py"
 Cohesion: 0.13
 Nodes (14): FixedCostSerializer, FixedCostViewSet, Meta, FixedCost, Meta, Budget (Envelope) models: Total Budget > Wallets > Categories., Recurring bill reminders (Netflix, utilities, etc.)., User-defined savings target for post-game analytics. (+6 more)
 
 ### Community 23 - "ExpenseService"
-Cohesion: 0.12
-Nodes (14): ExpenseService, Run after an expense is deleted: update group total if it was a group expense., Business logic for expense create/update/delete., Create equal shares for all active group members.          Uses ROUND_DOWN per s, Recalculate and save group's total_expenses., Send notifications for a new expense. Returns list of created notifications., Send notifications for an updated expense. Returns list of created notifications, Run after an expense is created: equal shares if group expense without shares_da (+6 more)
+Cohesion: 0.15
+Nodes (12): ExpenseService, Run after an expense is deleted: update group total if it was a group expense., Business logic for expense create/update/delete., Create equal shares for all active group members.          Uses ROUND_DOWN per s, Recalculate and save group's total_expenses., Send notifications for a new expense. Returns list of created notifications., Send notifications for an updated expense. Returns list of created notifications, Run after an expense is created: equal shares if group expense without shares_da (+4 more)
 
 ### Community 24 - "🚀 Expense Tracker API Documentation"
-Cohesion: 0.08
-Nodes (26): API Changelog, API Endpoints, API Versioning, Base URL & Versioning, Base URLs, Error Codes, Error Handling, 🚀 Expense Tracker API Documentation (+18 more)
+Cohesion: 0.09
+Nodes (23): API Changelog, API Endpoints, Authentication, Error Codes, Error Handling, 🚀 Expense Tracker API Documentation, Filtering, Filtering & Sorting (+15 more)
 
 ### Community 25 - "Security Setup Guide"
 Cohesion: 0.08
 Nodes (25): Additional Resources, API & Auth, AWS/EC2, AWS S3 (Optional), Backend Security, Database & Data, Deployment Security, Docker (+17 more)
 
 ### Community 26 - "ExpenseSerializer"
-Cohesion: 0.11
-Nodes (11): ExpenseSerializer, Map 'date' to 'expense_date' before validation and handle ID conversions, Return paid_by as created_by for backward compatibility, Return user_category for envelope budgeting (custom category in a wallet)., Additional validation - conversion happens in to_internal_value and create metho, _accessible_expense_qs(), _get_accessible_expense(), Expenses the user may sync: payer, share participant, or active group member. (+3 more)
+Cohesion: 0.10
+Nodes (12): ExpenseSerializer, Map 'date' to 'expense_date' before validation and handle ID conversions, Return paid_by as created_by for backward compatibility, Return user_category for envelope budgeting (custom category in a wallet)., Additional validation - conversion happens in to_internal_value and create metho, _accessible_expense_qs(), _get_accessible_expense(), Expenses the user may sync: payer, share participant, or active group member. (+4 more)
 
 ### Community 27 - "Settlement"
 Cohesion: 0.18
 Nodes (15): Meta, Payment, PaymentMethod, Model to store user payment methods, Check if settlement is confirmed by both parties, Model representing individual payments made through the platform, Model representing a settlement between users, Settlement (+7 more)
 
 ### Community 28 - "AppContext.tsx"
-Cohesion: 0.10
-Nodes (16): AppContext, AppContextType, AppProvider(), Expense, Group, Member, mockMembers, Notification (+8 more)
+Cohesion: 0.18
+Nodes (10): AppContext, AppContextType, AppProvider(), Expense, Group, Member, mockMembers, Notification (+2 more)
 
 ### Community 29 - "GroupViewSet"
 Cohesion: 0.09
-Nodes (11): GroupViewSet, Join a group using invite code, ViewSet for managing groups., Get group statistics (single-query aggregates)., Get group member balances.          Replaced nested Python loops (expense → shar, Ensure request is in serializer context, Mark all group expenses as settled, Search for users to add to a group (+3 more)
+Nodes (13): GroupMembershipSerializer, Group membership serializer, GroupViewSet, ViewSet for managing groups., Change a member's role, Get group statistics (single-query aggregates)., Get group member balances.          Replaced nested Python loops (expense → shar, Ensure request is in serializer context (+5 more)
 
 ### Community 30 - "Expense API"
 Cohesion: 0.09
@@ -393,20 +405,20 @@ Cohesion: 0.09
 Nodes (23): 1. List Groups, 2. Create Group, 3. Get Group Details, 4. Update Group, 5. Get Group Members, 6. Invite Member, 7. Leave Group, 8. Get Group Balances (+15 more)
 
 ### Community 32 - "🗄️ Database Schema Documentation"
-Cohesion: 0.09
-Nodes (23): Authentication Domain, Check Constraints, Custom Types, Data Types & Constraints, Database Design Principles, Database Maintenance, 🗄️ Database Schema Documentation, Entity Relationship Diagram (+15 more)
+Cohesion: 0.20
+Nodes (10): Database Design Principles, 🗄️ Database Schema Documentation, Entity Relationship Diagram, Indexes & Performance, Key Statistics, Overview, Performance-Critical Indexes, Query Optimization Tips (+2 more)
 
 ### Community 33 - "PostGameAnalyticsPage.tsx"
-Cohesion: 0.12
-Nodes (17): BudgetVsActual(), Row, CashFlowCard(), CashFlowCardProps, intensityColor(), IntensityHeatmap(), IntensityHeatmapProps, iconFor() (+9 more)
+Cohesion: 0.07
+Nodes (26): Dependencies & Execution Order, Format: `[ID] [P?] [Story] Description`, Implementation for User Story 1, Implementation for User Story 2, Implementation for User Story 3, Implementation Strategy, Incremental Delivery, MVP First (User Story 1 Only) (+18 more)
 
 ### Community 34 - "📚 Expense Tracker Developer Guide"
-Cohesion: 0.09
-Nodes (22): Appendix, Application Monitoring, Backend Stack, Backend Structure, Component Interaction Flow, DevOps & Tools, Environment Variables, 📚 Expense Tracker Developer Guide (+14 more)
+Cohesion: 0.14
+Nodes (14): Appendix, Backend Structure, Component Interaction Flow, Environment Variables, 📚 Expense Tracker Developer Guide, Frontend Structure, Further Resources, High-Level Architecture Diagram (+6 more)
 
 ### Community 35 - "Dashboard.tsx"
-Cohesion: 0.14
-Nodes (16): Analytics(), COLORS, Dashboard(), formatLocalDate(), QuickActionProps, StatCardProps, analyticsSlice, AnalyticsState (+8 more)
+Cohesion: 0.23
+Nodes (12): Analytics(), COLORS, analyticsSlice, AnalyticsState, AnalyticsSummary, CategoryBreakdown, exportReport, fetchAnalyticsSummary (+4 more)
 
 ### Community 36 - "compilerOptions"
 Cohesion: 0.09
@@ -429,12 +441,12 @@ Cohesion: 0.11
 Nodes (18): 1. List Payment Methods, 2. Add Payment Method, 3. List Settlements, 4. Create Settlement, 5. Confirm Settlement, 6. Process Payment, Payment API, Query Parameters (+10 more)
 
 ### Community 41 - "system_logging.py"
-Cohesion: 0.17
-Nodes (13): Any, APILoggingMiddleware, API request logging: database (admin UI) + console trace (dev monitoring)., Record API traffic to SystemLog and console., _client_ip(), _mirror_console(), Persist structured logs for admin monitoring + mirror to console., Print to terminal so devs can tail backend activity alongside the admin UI. (+5 more)
+Cohesion: 0.15
+Nodes (14): Any, APILoggingMiddleware, API request logging: database (admin UI) + console trace (dev monitoring)., Record API traffic to SystemLog and console., _client_ip(), _mirror_console(), Persist structured logs for admin monitoring + mirror to console., Print to terminal so devs can tail backend activity alongside the admin UI. (+6 more)
 
 ### Community 42 - "dependencies"
-Cohesion: 0.12
-Nodes (17): axios, @date-io/date-fns, @emotion/react, dependencies, axios, @date-io/date-fns, @emotion/react, @mui/icons-material (+9 more)
+Cohesion: 0.08
+Nodes (25): 1. Initialize Analysis Context, 2. Load Artifacts (Progressive Disclosure), 3. Build Semantic Models, 4. Detection Passes (Token-Efficient Analysis), 5. Severity Assignment, 6. Produce Compact Analysis Report, 7. Provide Next Actions, 8. Offer Remediation (+17 more)
 
 ### Community 43 - "DebtSimplifier"
 Cohesion: 0.17
@@ -457,16 +469,16 @@ Cohesion: 0.12
 Nodes (15): API Documentation, Backend Setup, Contributing, Core Features, Development, 💰 Envelope Budgeting System (New!), Expense Tracker & Spend Analytics App, Features (+7 more)
 
 ### Community 48 - "Group"
-Cohesion: 0.16
-Nodes (7): Group, Calculate balances for all group members, Model representing a group for shared expenses, Generate a unique invite code for the group, Get all admin members of the group, Get all active members of the group, Update the denormalized total_expenses field
+Cohesion: 0.25
+Nodes (5): Group, Calculate balances for all group members, Model representing a group for shared expenses, Get all admin members of the group, Get all active members of the group
 
 ### Community 49 - "DashboardLayout.tsx"
-Cohesion: 0.19
-Nodes (10): resetAuthCheckGuard(), ForgotPasswordForm(), bottomMenuItems, DashboardLayout(), DashboardLayoutProps, MenuItem, menuItems, Notification (+2 more)
+Cohesion: 0.14
+Nodes (14): resetAuthCheckGuard(), ForgotPasswordForm(), TODO: Implement social login, RegisterForm(), RegisterFormProps, bottomMenuItems, DashboardLayout(), DashboardLayoutProps (+6 more)
 
 ### Community 50 - "index.ts"
-Cohesion: 0.22
-Nodes (11): LoginForm(), LoginFormProps, TODO: Implement social login, TODO: Implement social login, RegisterForm(), RegisterFormProps, loginUser, registerUser (+3 more)
+Cohesion: 0.12
+Nodes (12): Dashboard(), formatLocalDate(), QuickActionProps, StatCardProps, Balance, ExpenseSettlement, Settlement, Settlements() (+4 more)
 
 ### Community 51 - "setup_dev.py"
 Cohesion: 0.39
@@ -481,16 +493,16 @@ Cohesion: 0.14
 Nodes (14): 1. Get Expense Summary, 2. Get Spending Trends, 3. Get Category Breakdown, 4. Generate Report, 5. Get Report Status, Analytics API, Query Parameters, Query Parameters (+6 more)
 
 ### Community 54 - "MorePage.tsx"
-Cohesion: 0.23
-Nodes (10): links, MorePage(), SearchAuditPage(), AdminGuard(), AuthGuard(), PublicGuard(), User, ADMIN_ROLES (+2 more)
+Cohesion: 0.15
+Nodes (17): LoginForm(), LoginFormProps, TODO: Implement social login, links, MorePage(), SearchAuditPage(), AdminGuard(), AuthGuard() (+9 more)
 
 ### Community 55 - "Notification API"
 Cohesion: 0.15
 Nodes (13): 1. List Notifications, 2. Mark Notification as Read, 3. Mark All as Read, 4. Get Notification Preferences, 5. Update Notification Preferences, Notification API, Query Parameters, Request Body (+5 more)
 
 ### Community 56 - "App.tsx"
-Cohesion: 0.22
-Nodes (9): AuthBootstrap(), isPublicPath(), PUBLIC_PATH_PREFIXES, skipLinkFocusStyles, skipLinkStyles, shouldDispatchAuthCheck(), AppRoutes(), registerSessionExpiredHandler() (+1 more)
+Cohesion: 0.13
+Nodes (15): AuthBootstrap(), isPublicPath(), PUBLIC_PATH_PREFIXES, skipLinkFocusStyles, skipLinkStyles, shouldDispatchAuthCheck(), AuthLayout(), AppRoutes() (+7 more)
 
 ### Community 57 - "._seed"
 Cohesion: 0.29
@@ -533,12 +545,12 @@ Cohesion: 0.18
 Nodes (11): API Development, Backend Development, Database Tools, 🛠️ Development Tools, 📚 Documentation, External Documentation, Frontend Development, Internal Documentation (+3 more)
 
 ### Community 68 - "Project tracker"
-Cohesion: 0.18
-Nodes (10): 2025-09-07, 2025-09-08, 2026-01-26, 2026-02-01, 2026-02-04, 2026-03-03, 2026-05-24, 2026-07-11 (+2 more)
+Cohesion: 0.17
+Nodes (11): 2025-09-07, 2025-09-08, 2026-01-26, 2026-02-01, 2026-02-04, 2026-03-03, 2026-05-24, 2026-07-11 (+3 more)
 
 ### Community 69 - "authSlice.ts"
-Cohesion: 0.22
-Nodes (7): authSlice, AuthState, fetchUser, initialState, login, register, tokenStorage
+Cohesion: 0.12
+Nodes (12): CATEGORIES, LEVEL_COLORS, LEVELS, systemLogsAPI, authSlice, AuthState, fetchUser, initialState (+4 more)
 
 ### Community 70 - "ExpenseFilterMixin"
 Cohesion: 0.27
@@ -569,8 +581,8 @@ Cohesion: 0.22
 Nodes (4): GroupActivitySerializer, Group activity serializer, Get recent group activity, # TODO: Send invitation email/SMS
 
 ### Community 78 - "GroupMembershipSerializer"
-Cohesion: 0.22
-Nodes (5): GroupMembershipSerializer, Group membership serializer, Change a member's role, Add an existing user as a member to the group, Notify group members when someone joins
+Cohesion: 0.13
+Nodes (5): get_feature_paths(), get_repo_root(), _persist_feature_json(), resolve_specify_init_dir(), common.sh script
 
 ### Community 79 - "GroupSerializer"
 Cohesion: 0.22
@@ -605,20 +617,20 @@ Cohesion: 0.22
 Nodes (9): Code Standards, Code Style, Code Style, Component Structure, Django Best Practices, Python/Django Standards, State Management, Type Hints (+1 more)
 
 ### Community 87 - "development"
-Cohesion: 0.22
-Nodes (9): browserslist, development, production, >0.2%, last 1 chrome version, last 1 firefox version, last 1 safari version, not dead (+1 more)
+Cohesion: 0.12
+Nodes (15): 1. Initialize Convergence Context, 2. Load Artifacts (Progressive Disclosure), 3. Build the Intent Inventory, 4. Assess the Codebase and Classify Findings, 5. Assign Severity, 6. Present the In-Session Findings Summary, 7. Append Convergence Tasks (or report converged), 8. Provide Next Actions (Handoff) (+7 more)
 
 ### Community 88 - "ledgerCoreTheme.ts"
-Cohesion: 0.36
-Nodes (6): AuthLayout(), baseComponents, ledgerCoreAdminLightTheme, ledgerCoreColors, ledgerCoreDarkTheme, ledgerCoreLightAuthTheme
+Cohesion: 0.23
+Nodes (7): statusColor, StatusDot(), useIsMobileLayout(), AdminAuditPage(), AdminDashboard(), statusLabel, enterpriseAPI
 
 ### Community 89 - "exceptions.py"
 Cohesion: 0.32
 Nodes (7): _build_error_response(), custom_exception_handler(), _normalize_detail(), Global exception handler for consistent JSON error responses across the API., Turn DRF exception detail (list/dict) into a single message string., Return a consistent JSON error response., Custom exception handler: DRF exceptions get normalized JSON;     unhandled exc
 
 ### Community 90 - "RecurringExpenseViewSet"
-Cohesion: 0.25
-Nodes (4): ViewSet for managing recurring expenses., Pause a recurring expense, Resume a recurring expense, RecurringExpenseViewSet
+Cohesion: 0.17
+Nodes (6): ViewSet for managing recurring expenses., Pause a recurring expense, Resume a recurring expense, Manually create the next expense from a recurring expense, Process all active recurring expenses (staff/admin only; normally a scheduled ta, RecurringExpenseViewSet
 
 ### Community 91 - "Frontend map"
 Cohesion: 0.25
@@ -649,8 +661,8 @@ Cohesion: 0.25
 Nodes (8): Analytics and notifications (summary), Auth and core, Budget envelopes, Data model, Enterprise, Expenses, Groups (UI: Squads), Payments and settlements
 
 ### Community 98 - "package.json"
-Cohesion: 0.25
-Nodes (7): eslintConfig, extends, name, private, version, react-app, react-app/jest
+Cohesion: 0.22
+Nodes (10): Find-SpecifyRoot(), Format-SpecKitCommand(), Get-CurrentBranch(), Get-FeaturePathsEnv(), Get-InvokeSeparator(), Get-Python3Command(), Get-RepoRoot(), Resolve-SpecifyInitDir() (+2 more)
 
 ### Community 99 - "manifest.json"
 Cohesion: 0.25
@@ -661,8 +673,8 @@ Cohesion: 0.25
 Nodes (7): Available Scripts, Getting Started with Create React App, Learn More, `npm run build`, `npm run eject`, `npm start`, `npm test`
 
 ### Community 101 - "AGENTS.md — LedgerCore (Expense Tracker & Analytics)"
-Cohesion: 0.29
-Nodes (7): AGENTS.md — LedgerCore (Expense Tracker & Analytics), Hard policies, Key paths, Product, Read first, Skills to use, UI zones
+Cohesion: 0.18
+Nodes (11): AGENTS.md — LedgerCore (Expense Tracker & Analytics), graphify, Hard policies, Key paths, Preferred workflow: graphify → speckit → superpowers, Product, Read first, Skills to use (+3 more)
 
 ### Community 103 - "Permissions checklist"
 Cohesion: 0.29
@@ -713,8 +725,12 @@ Cohesion: 0.48
 Nodes (6): API_ROUTES, getPendingExpenses(), openDB(), removePendingExpense(), syncExpenses(), urlsToCache
 
 ### Community 115 - ".accept"
-Cohesion: 0.33
-Nodes (3): Accept group invitation, Check if invitation is still valid, Accept the invitation
+Cohesion: 0.18
+Nodes (5): Accept group invitation, Check if invitation is still valid, Accept the invitation, Generate a unique invite code for the group, Update the denormalized total_expenses field
+
+### Community 116 - "GroupInvitationSerializer"
+Cohesion: 0.20
+Nodes (4): GroupInvitationSerializer, Group invitation serializer, Join a group using invite code, Invite a member to the group
 
 ### Community 117 - "Architecture"
 Cohesion: 0.33
@@ -825,8 +841,8 @@ Cohesion: 0.40
 Nodes (5): AI agents, Archived reports, LedgerCore documentation, Live API reference, Start here
 
 ### Community 144 - "scripts"
-Cohesion: 0.40
-Nodes (5): scripts, build, eject, start, test
+Cohesion: 0.15
+Nodes (12): Assumptions, Edge Cases, Feature Specification: [FEATURE NAME], Functional Requirements, Key Entities *(include if feature involves data)*, Measurable Outcomes, Requirements *(mandatory)*, Success Criteria *(mandatory)* (+4 more)
 
 ### Community 148 - "Add API endpoint"
 Cohesion: 0.50
@@ -849,8 +865,8 @@ Cohesion: 0.50
 Nodes (3): Agent checklist before changing sync, Offline sync, Protocol
 
 ### Community 154 - "Filtering & Sorting"
-Cohesion: 0.50
-Nodes (4): Filtering, Filtering & Sorting, Search, Sorting
+Cohesion: 0.18
+Nodes (10): Completion Report, Done When, Key rules, Mandatory Post-Execution Hooks, Outline, Phase 0: Outline & Research, Phase 1: Design & Contracts, Phases (+2 more)
 
 ### Community 155 - "Migration Strategy"
 Cohesion: 0.50
@@ -873,27 +889,115 @@ Cohesion: 0.67
 Nodes (3): Adding an endpoint, API map, Patterns
 
 ### Community 172 - "Authentication"
-Cohesion: 0.67
-Nodes (3): Authentication, JWT Authentication, Token Lifecycle
+Cohesion: 0.18
+Nodes (10): Completion Report, Done When, For AI Generation, Mandatory Post-Execution Hooks, Outline, Pre-Execution Checks, Quick Guidelines, Section Requirements (+2 more)
 
 ### Community 173 - "react"
+Cohesion: 0.18
+Nodes (10): Checklist Format (REQUIRED), Completion Report, Done When, Mandatory Post-Execution Hooks, Outline, Phase Structure, Pre-Execution Checks, Task Generation Rules (+2 more)
+
+### Community 207 - "date-fns"
+Cohesion: 0.18
+Nodes (10): Core Principles, Governance, [PRINCIPLE_1_NAME], [PRINCIPLE_2_NAME], [PRINCIPLE_3_NAME], [PRINCIPLE_4_NAME], [PRINCIPLE_5_NAME], [PROJECT_NAME] Constitution (+2 more)
+
+### Community 208 - "@emotion/styled"
+Cohesion: 0.18
+Nodes (10): Core Principles, Governance, [PRINCIPLE_1_NAME], [PRINCIPLE_2_NAME], [PRINCIPLE_3_NAME], [PRINCIPLE_4_NAME], [PRINCIPLE_5_NAME], [PROJECT_NAME] Constitution (+2 more)
+
+### Community 209 - "@mui/material"
+Cohesion: 0.27
+Nodes (6): AUTH_NO_REFRESH_PATHS, isAuthNoRefreshUrl(), notifySessionExpired(), refreshAccessToken(), SessionExpiredHandler, tokenStorage
+
+### Community 210 - "@mui/x-date-pickers"
+Cohesion: 0.22
+Nodes (8): Complexity Tracking, Constitution Check, Documentation (this feature), Implementation Plan: [FEATURE], Project Structure, Source Code (repository root), Summary, Technical Context
+
+### Community 211 - "react-dom"
+Cohesion: 0.25
+Nodes (3): Convert Decimal fields to float for JSON serialization, Lightweight serializer for list endpoints — excludes nested shares,     comments, SimpleExpenseSerializer
+
+### Community 212 - "react-router-dom"
+Cohesion: 0.25
+Nodes (7): Anti-Examples: What NOT To Do, Checklist Purpose: "Unit Tests for English", Example Checklist Types & Sample Items, Execution Steps, Post-Execution Checks, Pre-Execution Checks, User Input
+
+### Community 213 - "react-scripts"
+Cohesion: 0.33
+Nodes (4): MonthlyBudget, Total monthly budget cap for a user (year/month)., Sum of all wallet allocation amounts for this budget., Amount not yet assigned to any wallet.
+
+### Community 214 - "recharts"
+Cohesion: 0.29
+Nodes (4): ExpenseShareViewSet, ViewSet for managing expense shares., Get all shares for the current user, Get balance summary for the current user - optimized version
+
+### Community 215 - "@reduxjs/toolkit"
+Cohesion: 0.29
+Nodes (6): Completion Report, Done When, Mandatory Post-Execution Hooks, Outline, Pre-Execution Checks, User Input
+
+### Community 216 - "@testing-library/dom"
+Cohesion: 0.29
+Nodes (6): Completion Report, Done When, Mandatory Post-Execution Hooks, Outline, Pre-Execution Checks, User Input
+
+### Community 217 - "@testing-library/jest-dom"
+Cohesion: 0.33
+Nodes (6): Authentication Domain, 📊 Table: `auth_user`, 📊 Table: `email_verifications`, 📊 Table: `user_devices`, 📊 Table: `user_friendships`, 📊 Table: `user_profiles`
+
+### Community 218 - "@testing-library/react"
+Cohesion: 0.40
+Nodes (4): plugin, $schema, .opencode/plugins/graphify.js, superpowers@git+https://github.com/obra/superpowers.git
+
+### Community 219 - "@types/dompurify"
+Cohesion: 0.40
+Nodes (4): Outline, Post-Execution Checks, Pre-Execution Checks, User Input
+
+### Community 220 - "@types/jest"
+Cohesion: 0.40
+Nodes (4): Outline, Post-Execution Checks, Pre-Execution Checks, User Input
+
+### Community 222 - "@types/react-dom"
+Cohesion: 0.40
+Nodes (4): [Category 1], [Category 2], [CHECKLIST TYPE] Checklist: [FEATURE NAME], Notes
+
+### Community 266 - "Webhooks"
+Cohesion: 0.50
+Nodes (4): Webhook Events, Webhook Payload Format, Webhook Security, Webhooks
+
+### Community 267 - "Data Types & Constraints"
+Cohesion: 0.50
+Nodes (4): Check Constraints, Custom Types, Data Types & Constraints, Triggers
+
+### Community 268 - "Monitoring & Logging"
+Cohesion: 0.50
+Nodes (4): Application Monitoring, Key Metrics to Monitor, Logging Configuration, Monitoring & Logging
+
+### Community 269 - "Technology Stack"
+Cohesion: 0.50
+Nodes (4): Backend Stack, DevOps & Tools, Frontend Stack, Technology Stack
+
+### Community 271 - "Base URL & Versioning"
 Cohesion: 0.67
-Nodes (3): react, SkipLink(), react
+Nodes (3): API Versioning, Base URL & Versioning, Base URLs
+
+### Community 272 - "Pagination"
+Cohesion: 0.67
+Nodes (3): Pagination, Pagination Parameters, Pagination Response
+
+### Community 273 - "Database Maintenance"
+Cohesion: 0.67
+Nodes (3): Database Maintenance, Monitoring Queries, Regular Tasks
 
 ## Knowledge Gaps
-- **764 isolated node(s):** `Migration`, `Migration`, `Meta`, `Migration`, `Migration` (+759 more)
+- **876 isolated node(s):** `$schema`, `.opencode/plugins/graphify.js`, `superpowers@git+https://github.com/obra/superpowers.git`, `check-prerequisites.sh script`, `common.sh script` (+871 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **70 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **59 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `TimeStampedModel` connect `TimeStampedModel` to `User`, `GroupInvitation`, `Notification`, `Currency`, `PaymentWebhook`, `ExpenseShare`, `WalletAllocation`, `Entity`, `PaymentRequest`, `GeneratedReport`, `Expense`, `Group`, `MonthlyBudget`, `models.py`, `Settlement`?**
+- **Why does `TimeStampedModel` connect `TimeStampedModel` to `User`, `GroupInvitation`, `Notification`, `Currency`, `PaymentWebhook`, `ExpenseShare`, `WalletAllocation`, `Entity`, `PaymentRequest`, `GeneratedReport`, `Expense`, `Group`, `MonthlyBudget`, `react-scripts`, `models.py`, `Settlement`?**
   _High betweenness centrality (0.096) - this node is a cross-community bridge._
-- **Why does `UUIDModel` connect `MonthlyBudget` to `GroupInvitation`, `Notification`, `PaymentWebhook`, `ExpenseShare`, `WalletAllocation`, `Entity`, `PaymentRequest`, `GeneratedReport`, `TimeStampedModel`, `Expense`, `Group`, `models.py`, `Settlement`?**
-  _High betweenness centrality (0.030) - this node is a cross-community bridge._
-- **Why does `Group` connect `Group` to `GroupInvitation`, `views.py`, `TimeStampedModel`, `GroupMembershipSerializer`, `GroupSerializer`, `GroupInvitationSerializer`, `MonthlyBudget`, `GroupViewSet`?**
-  _High betweenness centrality (0.022) - this node is a cross-community bridge._
+- **Why does `UUIDModel` connect `ExpenseShare` to `GroupInvitation`, `Notification`, `PaymentWebhook`, `Entity`, `PaymentRequest`, `GeneratedReport`, `TimeStampedModel`, `Expense`, `Group`, `MonthlyBudget`, `react-scripts`, `models.py`, `Settlement`?**
+  _High betweenness centrality (0.029) - this node is a cross-community bridge._
+- **Why does `Expense` connect `Expense` to `RecurringExpenseViewSet`, `ExpenseFilterMixin`, `ExpenseShare`, `ExpenseViewSet`, `TimeStampedModel`, `react-dom`, `recharts`, `ExpenseService`, `ExpenseSerializer`?**
+  _High betweenness centrality (0.020) - this node is a cross-community bridge._
 - **Are the 27 inferred relationships involving `User` (e.g. with `ChangePasswordSerializer` and `CustomTokenObtainPairSerializer`) actually correct?**
   _`User` has 27 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 16 inferred relationships involving `Expense` (e.g. with `ExpenseFilterMixin` and `CategorySerializer`) actually correct?**
