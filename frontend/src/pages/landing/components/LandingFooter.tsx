@@ -67,10 +67,10 @@ export const LandingFooter: React.FC<LandingFooterProps> = ({ variant }) => {
         bgcolor: landing.black,
         color: landing.white,
         py: { xs: 5, md: 8 },
-        px: { xs: 2, md: 3 },
+        px: { xs: 2, md: 3, lg: 4, xl: 6 },
       }}
     >
-      <Box sx={{ maxWidth: landing.maxContent, mx: 'auto' }}>
+      <Box sx={{ width: '100%' }}>
         {isCompact ? (
           <>
             <LandingLogo />

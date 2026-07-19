@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Box,
   Typography,
@@ -8,13 +8,12 @@ import {
   ListItem,
   ListItemText,
   Button,
-  CircularProgress,
-  Alert,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { enterpriseAPI } from '../../services/api';
 import { StatusDot } from '../../components/admin/StatusDot';
 import { useIsMobileLayout } from '../../layout/useIsMobileLayout';
+import { LcEmptyState, LcErrorState, LcLoadingState, PageTransition } from '../../components/lc';
 
 const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -23,8 +22,11 @@ const AdminDashboard: React.FC = () => {
   const [auditEvents, setAuditEvents] = useState<any[]>([]);
   const [exports, setExports] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  useEffect(() => {
+  const loadDashboard = useCallback(() => {
+    setLoading(true);
+    setError(false);
     Promise.all([
       enterpriseAPI.entities.list(),
       enterpriseAPI.audit.list(),
@@ -35,16 +37,23 @@ const AdminDashboard: React.FC = () => {
         setAuditEvents(a.results || a || []);
         setExports(x.results || x || []);
       })
+      .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    loadDashboard();
+  }, [loadDashboard]);
 
   const flaggedEntities = entities.filter((e) => e.status === 'flagged');
   const pendingAudits = auditEvents.filter((e) => e.status === 'pending' || e.status === 'flagged');
   const pendingExports = exports.filter((e) => e.status === 'pending' || e.status === 'processing');
 
-  if (loading) return <CircularProgress />;
+  if (loading) return <LcLoadingState label="Loading dashboard..." />;
+  if (error) return <LcErrorState message="We couldn't load the admin dashboard." onRetry={loadDashboard} />;
 
   return (
+    <PageTransition>
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
         <Box>
@@ -113,7 +122,10 @@ const AdminDashboard: React.FC = () => {
               Supervised Entities
             </Typography>
             {entities.length === 0 ? (
-              <Alert severity="info">No entities yet. Add one to get started.</Alert>
+              <LcEmptyState
+                title="No entities yet"
+                description="Add a supervised entity to get started."
+              />
             ) : (
               <List>
                 {entities.map((e) => (
@@ -199,6 +211,7 @@ const AdminDashboard: React.FC = () => {
         </Box>
       )}
     </Box>
+    </PageTransition>
   );
 };
 

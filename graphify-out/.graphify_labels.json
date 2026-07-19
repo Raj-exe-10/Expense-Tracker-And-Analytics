@@ -279,5 +279,12 @@
   "277": "setup-tasks.sh",
   "278": "check-prerequisites.ps1",
   "279": "setup-plan.ps1",
-  "280": "setup-tasks.ps1"
+  "280": "setup-tasks.ps1",
+  "281": "SKILL.md",
+  "282": "Specification Quality Checklist: Production UI Polish + Animations",
+  "283": "tasks.md",
+  "284": "Quickstart: Validating Production UI Polish + Animations",
+  "285": "Notifications.tsx",
+  "286": "Security Checklist",
+  "287": "Filtering & Sorting"
 }

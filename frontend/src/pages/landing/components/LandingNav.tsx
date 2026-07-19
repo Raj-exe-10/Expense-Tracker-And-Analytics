@@ -66,10 +66,8 @@ export const LandingNav: React.FC<LandingNavProps> = ({ variant }) => {
       >
         <Toolbar
           sx={{
-            maxWidth: landing.maxContent,
-            mx: 'auto',
             width: '100%',
-            px: { xs: 2, md: 3 },
+            px: { xs: 2, md: 3, lg: 4, xl: 6 },
             minHeight: { xs: 56, md: 64 },
           }}
         >

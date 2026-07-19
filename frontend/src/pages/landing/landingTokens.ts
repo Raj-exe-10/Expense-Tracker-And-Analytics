@@ -20,7 +20,6 @@ export const landing = {
   budgetB: '#6B3A3A',
   terminalGreen: '#4CAF50',
   terminalMuted: '#888888',
-  maxContent: 1200,
 } as const;
 
 export const landingFonts = {

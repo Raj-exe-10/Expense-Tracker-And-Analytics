@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, Button, Grid, Typography } from '@mui/material';
+import { motion, useReducedMotion, Variants } from 'framer-motion';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import { useNavigate } from 'react-router-dom';
 import { LandingNav } from '../components/LandingNav';
@@ -25,9 +26,8 @@ const SectionShell: React.FC<{ children: React.ReactNode; id?: string }> = ({ ch
   <Box
     id={id}
     sx={{
-      maxWidth: landing.maxContent,
-      mx: 'auto',
-      px: { md: 3, lg: 4 },
+      width: '100%',
+      px: { md: 3, lg: 4, xl: 6 },
       py: { md: 8, lg: 10 },
     }}
   >
@@ -38,6 +38,7 @@ const SectionShell: React.FC<{ children: React.ReactNode; id?: string }> = ({ ch
 export const DesktopLanding: React.FC = () => {
   const navigate = useNavigate();
   const { headline, expensesTrackedStat, currency } = useLandingLocale();
+  const prefersReducedMotion = useReducedMotion();
 
   const STATS = [
     { value: '500+', label: 'Enterprise Users' },
@@ -46,129 +47,173 @@ export const DesktopLanding: React.FC = () => {
     { value: '4.8', label: 'Average Rating' },
   ];
 
+  const staggerContainer: Variants = {
+    hidden: {},
+    visible: { transition: { staggerChildren: prefersReducedMotion ? 0 : 0.1 } },
+  };
+  const fadeUpItem: Variants = {
+    hidden: { opacity: 0, y: prefersReducedMotion ? 0 : 14 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } },
+  };
+  const fadeInItem: Variants = {
+    hidden: { opacity: 0 },
+    visible: { opacity: 1, transition: { duration: 0.35, ease: 'easeOut' } },
+  };
+
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: landing.black, color: landing.white }}>
       <LandingNav variant="dark" />
 
       <SectionShell>
         <Grid container spacing={4} alignItems="center">
-          <Grid item xs={12} lg={5}>
-            <Typography
-              component="h1"
-              sx={{
-                fontFamily: landingFonts.serif,
-                fontWeight: 600,
-                fontSize: { md: '2.75rem', lg: '3.25rem' },
-                lineHeight: 1.15,
-                mb: 2,
-              }}
+          <Grid item xs={12} md={6} lg={5}>
+            <motion.div
+              initial={prefersReducedMotion ? undefined : 'hidden'}
+              animate={prefersReducedMotion ? undefined : 'visible'}
+              variants={staggerContainer}
             >
-              {headline}
-            </Typography>
-            <Typography
-              sx={{
-                fontFamily: landingFonts.sans,
-                color: landing.gray400,
-                fontSize: '1.05rem',
-                lineHeight: 1.6,
-                mb: 4,
-                maxWidth: 520,
-              }}
-            >
-              Institutional-grade financial intelligence, simplified for personal clarity and team
-              efficiency. Precision in every byte.
-            </Typography>
-            <Typography
-              sx={{
-                fontFamily: landingFonts.mono,
-                fontSize: '0.72rem',
-                color: landing.gray600,
-                mb: 3,
-              }}
-            >
-              Demo amounts in {currency} · detected from your locale
-            </Typography>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 4 }}>
-              <Button
-                variant="contained"
-                size="large"
-                onClick={() => navigate('/register')}
-                sx={{
-                  bgcolor: landing.white,
-                  color: landing.black,
-                  fontFamily: landingFonts.sans,
-                  textTransform: 'none',
-                  fontWeight: 600,
-                  px: 3,
-                  boxShadow: 'none',
-                  '&:hover': { bgcolor: landing.gray200, boxShadow: 'none' },
-                }}
-              >
-                Start for free
-              </Button>
-              <Button
-                variant="outlined"
-                size="large"
-                onClick={() => navigate('/register')}
-                sx={{
-                  borderColor: landing.white,
-                  color: landing.white,
-                  fontFamily: landingFonts.sans,
-                  textTransform: 'none',
-                  fontWeight: 600,
-                  px: 3,
-                  '&:hover': { borderColor: landing.gray200, bgcolor: 'rgba(255,255,255,0.06)' },
-                }}
-              >
-                Book enterprise demo
-              </Button>
-            </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Box sx={{ display: 'flex' }}>
-                {['#888', '#AAA', '#CCC'].map((c, i) => (
-                  <Box
-                    key={c}
+              <motion.div variants={fadeUpItem}>
+                <Typography
+                  component="h1"
+                  sx={{
+                    fontFamily: landingFonts.serif,
+                    fontWeight: 600,
+                    fontSize: { md: '2.4rem', lg: '3.25rem' },
+                    lineHeight: 1.15,
+                    mb: 2,
+                  }}
+                >
+                  {headline}
+                </Typography>
+              </motion.div>
+              <motion.div variants={fadeUpItem}>
+                <Typography
+                  sx={{
+                    fontFamily: landingFonts.sans,
+                    color: landing.gray400,
+                    fontSize: '1.05rem',
+                    lineHeight: 1.6,
+                    mb: 4,
+                    maxWidth: 520,
+                  }}
+                >
+                  Institutional-grade financial intelligence, simplified for personal clarity and team
+                  efficiency. Precision in every byte.
+                </Typography>
+              </motion.div>
+              <motion.div variants={fadeUpItem}>
+                <Typography
+                  sx={{
+                    fontFamily: landingFonts.mono,
+                    fontSize: '0.72rem',
+                    color: landing.gray600,
+                    mb: 3,
+                  }}
+                >
+                  Demo amounts in {currency} · detected from your locale
+                </Typography>
+              </motion.div>
+              <motion.div variants={fadeUpItem}>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 4 }}>
+                  <Button
+                    variant="contained"
+                    size="large"
+                    onClick={() => navigate('/register')}
                     sx={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: '50%',
-                      bgcolor: c,
-                      border: `2px solid ${landing.black}`,
-                      ml: i > 0 ? -1.5 : 0,
+                      bgcolor: landing.white,
+                      color: landing.black,
+                      fontFamily: landingFonts.sans,
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      px: 3,
+                      boxShadow: 'none',
+                      '&:hover': { bgcolor: landing.gray200, boxShadow: 'none' },
                     }}
-                  />
-                ))}
-              </Box>
-              <Typography sx={{ fontFamily: landingFonts.sans, fontSize: '0.9rem', color: landing.gray400 }}>
-                ★ 4.8 from sophisticated analysts
-              </Typography>
-            </Box>
+                  >
+                    Start for free
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    size="large"
+                    onClick={() => navigate('/register')}
+                    sx={{
+                      borderColor: landing.white,
+                      color: landing.white,
+                      fontFamily: landingFonts.sans,
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      px: 3,
+                      '&:hover': { borderColor: landing.gray200, bgcolor: 'rgba(255,255,255,0.06)' },
+                    }}
+                  >
+                    Book enterprise demo
+                  </Button>
+                </Box>
+              </motion.div>
+              <motion.div variants={fadeUpItem}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Box sx={{ display: 'flex' }}>
+                    {['#888', '#AAA', '#CCC'].map((c, i) => (
+                      <Box
+                        key={c}
+                        sx={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: '50%',
+                          bgcolor: c,
+                          border: `2px solid ${landing.black}`,
+                          ml: i > 0 ? -1.5 : 0,
+                        }}
+                      />
+                    ))}
+                  </Box>
+                  <Typography sx={{ fontFamily: landingFonts.sans, fontSize: '0.9rem', color: landing.gray400 }}>
+                    ★ 4.8 from sophisticated analysts
+                  </Typography>
+                </Box>
+              </motion.div>
+            </motion.div>
           </Grid>
 
-          <Grid item xs={12} lg={7}>
-            <HeroDashboardPreview />
+          <Grid item xs={12} md={6} lg={7}>
+            <motion.div
+              initial={prefersReducedMotion ? undefined : { opacity: 0, scale: 0.98 }}
+              animate={prefersReducedMotion ? undefined : { opacity: 1, scale: 1 }}
+              transition={{ duration: 0.5, delay: 0.15, ease: 'easeOut' }}
+            >
+              <HeroDashboardPreview />
+            </motion.div>
           </Grid>
         </Grid>
       </SectionShell>
 
       <Box sx={{ borderTop: `1px solid ${landing.border}`, borderBottom: `1px solid ${landing.border}` }}>
-        <Grid
-          container
-          sx={{ maxWidth: landing.maxContent, mx: 'auto', px: { md: 3, lg: 4 }, py: 4 }}
+        <motion.div
+          initial={prefersReducedMotion ? undefined : 'hidden'}
+          whileInView={prefersReducedMotion ? undefined : 'visible'}
+          viewport={{ once: true, margin: '-80px' }}
+          variants={staggerContainer}
         >
-          {STATS.map((s) => (
-            <Grid item xs={6} md={3} key={s.label}>
-              <Typography
-                sx={{ fontFamily: landingFonts.serif, fontSize: '1.75rem', fontWeight: 600 }}
-              >
-                {s.value}
-              </Typography>
-              <Typography sx={{ fontFamily: landingFonts.sans, fontSize: '0.85rem', color: landing.gray400 }}>
-                {s.label}
-              </Typography>
-            </Grid>
-          ))}
-        </Grid>
+          <Grid
+            container
+            sx={{ width: '100%', px: { md: 3, lg: 4, xl: 6 }, py: 4 }}
+          >
+            {STATS.map((s) => (
+              <Grid item xs={6} md={3} key={s.label}>
+                <motion.div variants={fadeUpItem}>
+                  <Typography
+                    sx={{ fontFamily: landingFonts.serif, fontSize: '1.75rem', fontWeight: 600 }}
+                  >
+                    {s.value}
+                  </Typography>
+                  <Typography sx={{ fontFamily: landingFonts.sans, fontSize: '0.85rem', color: landing.gray400 }}>
+                    {s.label}
+                  </Typography>
+                </motion.div>
+              </Grid>
+            ))}
+          </Grid>
+        </motion.div>
       </Box>
 
       <SectionShell id="product">
@@ -187,36 +232,54 @@ export const DesktopLanding: React.FC = () => {
               <Typography sx={{ color: landing.gray400, mb: 1, fontSize: '0.75rem' }}>
                 smart insights.log
               </Typography>
-              {TERMINAL_LINES.map((line) => (
-                <Typography
-                  key={line}
-                  sx={{
-                    color: line.startsWith('>') ? landing.terminalGreen : landing.terminalMuted,
-                    lineHeight: 1.8,
-                  }}
-                >
-                  {line}
-                </Typography>
-              ))}
+              <motion.div
+                initial={prefersReducedMotion ? undefined : 'hidden'}
+                whileInView={prefersReducedMotion ? undefined : 'visible'}
+                viewport={{ once: true, margin: '-60px' }}
+                variants={{
+                  hidden: {},
+                  visible: { transition: { staggerChildren: prefersReducedMotion ? 0 : 0.35 } },
+                }}
+              >
+                {TERMINAL_LINES.map((line) => (
+                  <motion.div key={line} variants={fadeInItem}>
+                    <Typography
+                      sx={{
+                        color: line.startsWith('>') ? landing.terminalGreen : landing.terminalMuted,
+                        lineHeight: 1.8,
+                      }}
+                    >
+                      {line}
+                    </Typography>
+                  </motion.div>
+                ))}
+              </motion.div>
             </Box>
           </Grid>
           <Grid item xs={12} md={6} order={{ xs: 1, md: 2 }}>
-            <Typography
-              component="h2"
-              sx={{ fontFamily: landingFonts.serif, fontSize: '2rem', fontWeight: 600, mb: 2 }}
+            <motion.div
+              initial={prefersReducedMotion ? undefined : { opacity: 0, y: 16 }}
+              whileInView={prefersReducedMotion ? undefined : { opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: '-80px' }}
+              transition={{ duration: 0.45, ease: 'easeOut' }}
             >
-              Algorithmic Clarity.
-            </Typography>
-            <Typography sx={{ fontFamily: landingFonts.sans, color: landing.gray400, lineHeight: 1.7, mb: 3 }}>
-              Move beyond static reports. Our system actively scans your ledger for inefficiencies,
-              providing actionable intelligence with mathematical precision.
-            </Typography>
-            {['Auto-categorization', 'Trend anomaly detection'].map((item) => (
-              <Box key={item} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                <CheckCircleOutlineIcon sx={{ fontSize: 20, color: landing.white }} />
-                <Typography sx={{ fontFamily: landingFonts.sans }}>{item}</Typography>
-              </Box>
-            ))}
+              <Typography
+                component="h2"
+                sx={{ fontFamily: landingFonts.serif, fontSize: '2rem', fontWeight: 600, mb: 2 }}
+              >
+                Algorithmic Clarity.
+              </Typography>
+              <Typography sx={{ fontFamily: landingFonts.sans, color: landing.gray400, lineHeight: 1.7, mb: 3 }}>
+                Move beyond static reports. Our system actively scans your ledger for inefficiencies,
+                providing actionable intelligence with mathematical precision.
+              </Typography>
+              {['Auto-categorization', 'Trend anomaly detection'].map((item) => (
+                <Box key={item} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                  <CheckCircleOutlineIcon sx={{ fontSize: 20, color: landing.white }} />
+                  <Typography sx={{ fontFamily: landingFonts.sans }}>{item}</Typography>
+                </Box>
+              ))}
+            </motion.div>
           </Grid>
         </Grid>
       </SectionShell>
@@ -224,22 +287,29 @@ export const DesktopLanding: React.FC = () => {
       <SectionShell id="solutions">
         <Grid container spacing={6} alignItems="center">
           <Grid item xs={12} md={6}>
-            <Typography
-              component="h2"
-              sx={{ fontFamily: landingFonts.serif, fontSize: '2rem', fontWeight: 600, mb: 2 }}
+            <motion.div
+              initial={prefersReducedMotion ? undefined : { opacity: 0, y: 16 }}
+              whileInView={prefersReducedMotion ? undefined : { opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: '-80px' }}
+              transition={{ duration: 0.45, ease: 'easeOut' }}
             >
-              Synchronized Ledgers.
-            </Typography>
-            <Typography sx={{ fontFamily: landingFonts.sans, color: landing.gray400, lineHeight: 1.7, mb: 3 }}>
-              Real-time multi-user concurrency without data collisions. Maintain a single source of
-              truth across decentralized analyst teams.
-            </Typography>
-            {['Granular access controls', 'Immutable audit trails'].map((item) => (
-              <Box key={item} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                <CheckCircleOutlineIcon sx={{ fontSize: 20, color: landing.white }} />
-                <Typography sx={{ fontFamily: landingFonts.sans }}>{item}</Typography>
-              </Box>
-            ))}
+              <Typography
+                component="h2"
+                sx={{ fontFamily: landingFonts.serif, fontSize: '2rem', fontWeight: 600, mb: 2 }}
+              >
+                Synchronized Ledgers.
+              </Typography>
+              <Typography sx={{ fontFamily: landingFonts.sans, color: landing.gray400, lineHeight: 1.7, mb: 3 }}>
+                Real-time multi-user concurrency without data collisions. Maintain a single source of
+                truth across decentralized analyst teams.
+              </Typography>
+              {['Granular access controls', 'Immutable audit trails'].map((item) => (
+                <Box key={item} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                  <CheckCircleOutlineIcon sx={{ fontSize: 20, color: landing.white }} />
+                  <Typography sx={{ fontFamily: landingFonts.sans }}>{item}</Typography>
+                </Box>
+              ))}
+            </motion.div>
           </Grid>
           <Grid item xs={12} md={6}>
             <Box
@@ -253,29 +323,41 @@ export const DesktopLanding: React.FC = () => {
               <Typography sx={{ fontFamily: landingFonts.mono, fontSize: '0.8rem', color: landing.gray400, mb: 2 }}>
                 Active Sessions (3)
               </Typography>
-              {SESSIONS.map((s) => (
-                <Box
-                  key={s.name}
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1.5,
-                    py: 1.5,
-                    borderBottom: `1px solid ${landing.border}`,
-                    '&:last-child': { borderBottom: 0 },
-                  }}
-                >
-                  <Box
-                    sx={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: '50%',
-                      bgcolor: s.status === 'online' ? landing.terminalGreen : landing.gray600,
-                    }}
-                  />
-                  <Typography sx={{ fontFamily: landingFonts.mono, fontSize: '0.9rem' }}>{s.name}</Typography>
-                </Box>
-              ))}
+              <motion.div
+                initial={prefersReducedMotion ? undefined : 'hidden'}
+                whileInView={prefersReducedMotion ? undefined : 'visible'}
+                viewport={{ once: true, margin: '-60px' }}
+                variants={staggerContainer}
+              >
+                {SESSIONS.map((s) => (
+                  <motion.div key={s.name} variants={fadeUpItem}>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1.5,
+                        py: 1.5,
+                        borderBottom: `1px solid ${landing.border}`,
+                        '&:last-child': { borderBottom: 0 },
+                      }}
+                    >
+                      <motion.div
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: '50%',
+                          background: s.status === 'online' ? landing.terminalGreen : landing.gray600,
+                        }}
+                        animate={
+                          prefersReducedMotion || s.status !== 'online' ? undefined : { opacity: [1, 0.4, 1] }
+                        }
+                        transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
+                      />
+                      <Typography sx={{ fontFamily: landingFonts.mono, fontSize: '0.9rem' }}>{s.name}</Typography>
+                    </Box>
+                  </motion.div>
+                ))}
+              </motion.div>
             </Box>
           </Grid>
         </Grid>

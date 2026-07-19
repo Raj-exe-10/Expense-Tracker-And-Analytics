@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { Box, Typography } from '@mui/material';
+import { motion, useReducedMotion } from 'framer-motion';
 import { CashFlowCategory } from '../../../utils/localeCurrency';
 import { landing, landingFonts } from '../landingTokens';
 
@@ -43,6 +44,7 @@ export const CashFlowSankey: React.FC<CashFlowSankeyProps> = ({
 }) => {
   const chartHeight = compact ? 200 : 240;
   const chartWidth = 100;
+  const prefersReducedMotion = useReducedMotion();
 
   const layout = useMemo(() => {
     const gap = 6;
@@ -76,40 +78,46 @@ export const CashFlowSankey: React.FC<CashFlowSankeyProps> = ({
         width: '100%',
       }}
     >
-      <Box
-        sx={{
-          width: { xs: 88, sm: 108 },
-          flexShrink: 0,
-          border: `1px solid ${landing.border}`,
-          borderRadius: 1,
-          bgcolor: landing.gray900,
-          p: 1.25,
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
-        }}
+      <motion.div
+        style={{ flexShrink: 0, display: 'flex' }}
+        initial={prefersReducedMotion ? undefined : { opacity: 0, x: -8 }}
+        animate={prefersReducedMotion ? undefined : { opacity: 1, x: 0 }}
+        transition={{ duration: 0.4, ease: 'easeOut' }}
       >
-        <Typography
+        <Box
           sx={{
-            fontFamily: landingFonts.sans,
-            fontSize: compact ? '0.65rem' : '0.72rem',
-            color: landing.gray400,
-            mb: 0.5,
+            width: { xs: 76, sm: 108 },
+            border: `1px solid ${landing.border}`,
+            borderRadius: 1,
+            bgcolor: landing.gray900,
+            p: 1.25,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
           }}
         >
-          Total Income
-        </Typography>
-        <Typography
-          sx={{
-            fontFamily: landingFonts.sans,
-            fontWeight: 700,
-            fontSize: compact ? '0.85rem' : '1rem',
-            lineHeight: 1.2,
-          }}
-        >
-          {formatMoney(totalIncome)}
-        </Typography>
-      </Box>
+          <Typography
+            sx={{
+              fontFamily: landingFonts.sans,
+              fontSize: compact ? '0.65rem' : '0.72rem',
+              color: landing.gray400,
+              mb: 0.5,
+            }}
+          >
+            Total Income
+          </Typography>
+          <Typography
+            sx={{
+              fontFamily: landingFonts.sans,
+              fontWeight: 700,
+              fontSize: compact ? '0.85rem' : '1rem',
+              lineHeight: 1.2,
+            }}
+          >
+            {formatMoney(totalIncome)}
+          </Typography>
+        </Box>
+      </motion.div>
 
       <Box sx={{ flex: 1, position: 'relative', minWidth: 48 }}>
         <Box
@@ -124,8 +132,8 @@ export const CashFlowSankey: React.FC<CashFlowSankeyProps> = ({
             overflow: 'visible',
           }}
         >
-          {layout.nodes.map((node) => (
-            <path
+          {layout.nodes.map((node, i) => (
+            <motion.path
               key={node.id}
               d={buildLinkPath(
                 node.sourceTop + 1,
@@ -136,6 +144,9 @@ export const CashFlowSankey: React.FC<CashFlowSankeyProps> = ({
                 chartHeight,
               )}
               fill="rgba(255,255,255,0.16)"
+              initial={prefersReducedMotion ? undefined : { opacity: 0 }}
+              animate={prefersReducedMotion ? undefined : { opacity: 1 }}
+              transition={{ duration: 0.4, delay: 0.15 + i * 0.08, ease: 'easeOut' }}
             />
           ))}
         </Box>
@@ -143,7 +154,7 @@ export const CashFlowSankey: React.FC<CashFlowSankeyProps> = ({
 
       <Box
         sx={{
-          width: { xs: 120, sm: 148 },
+          width: { xs: 104, sm: 148 },
           flexShrink: 0,
           display: 'flex',
           flexDirection: 'column',
@@ -151,54 +162,61 @@ export const CashFlowSankey: React.FC<CashFlowSankeyProps> = ({
           justifyContent: 'space-between',
         }}
       >
-        {layout.nodes.map((node) => (
-          <Box
+        {layout.nodes.map((node, i) => (
+          <motion.div
             key={node.id}
-            sx={{
-              flex: 1,
-              border: `1px solid ${landing.border}`,
-              borderRadius: 1,
-              bgcolor: landing.gray900,
-              px: 1,
-              py: 0.75,
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'center',
-              minHeight: compact ? 36 : 44,
-            }}
+            style={{ flex: 1 }}
+            initial={prefersReducedMotion ? undefined : { opacity: 0, x: 8 }}
+            animate={prefersReducedMotion ? undefined : { opacity: 1, x: 0 }}
+            transition={{ duration: 0.35, delay: 0.2 + i * 0.08, ease: 'easeOut' }}
           >
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 0.5 }}>
+            <Box
+              sx={{
+                height: '100%',
+                border: `1px solid ${landing.border}`,
+                borderRadius: 1,
+                bgcolor: landing.gray900,
+                px: 1,
+                py: 0.75,
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                minHeight: compact ? 36 : 44,
+              }}
+            >
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 0.5 }}>
+                <Typography
+                  sx={{
+                    fontFamily: landingFonts.sans,
+                    fontSize: compact ? '0.62rem' : '0.7rem',
+                    color: landing.gray400,
+                    lineHeight: 1.2,
+                  }}
+                >
+                  {node.label}
+                </Typography>
+                <Typography
+                  sx={{
+                    fontFamily: landingFonts.mono,
+                    fontSize: compact ? '0.6rem' : '0.68rem',
+                    color: landing.gray600,
+                  }}
+                >
+                  {node.percent}%
+                </Typography>
+              </Box>
               <Typography
                 sx={{
                   fontFamily: landingFonts.sans,
-                  fontSize: compact ? '0.62rem' : '0.7rem',
-                  color: landing.gray400,
-                  lineHeight: 1.2,
+                  fontWeight: 600,
+                  fontSize: compact ? '0.72rem' : '0.82rem',
+                  mt: 0.25,
                 }}
               >
-                {node.label}
-              </Typography>
-              <Typography
-                sx={{
-                  fontFamily: landingFonts.mono,
-                  fontSize: compact ? '0.6rem' : '0.68rem',
-                  color: landing.gray600,
-                }}
-              >
-                {node.percent}%
+                {formatMoney(node.amount)}
               </Typography>
             </Box>
-            <Typography
-              sx={{
-                fontFamily: landingFonts.sans,
-                fontWeight: 600,
-                fontSize: compact ? '0.72rem' : '0.82rem',
-                mt: 0.25,
-              }}
-            >
-              {formatMoney(node.amount)}
-            </Typography>
-          </Box>
+          </motion.div>
         ))}
       </Box>
     </Box>

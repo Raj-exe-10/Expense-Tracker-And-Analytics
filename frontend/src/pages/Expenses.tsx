@@ -28,6 +28,7 @@ import { fetchGroups } from '../store/slices/groupSlice';
 import ExpenseList from '../components/expenses/ExpenseList';
 import ExpenseForm from '../components/expenses/ExpenseForm';
 import RecurringExpensesList from '../components/expenses/RecurringExpensesList';
+import { LcLoadingState, LcEmptyState, LcErrorState, PageTransition } from '../components/lc';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -64,7 +65,7 @@ const Expenses: React.FC = () => {
   const dispatch = useAppDispatch();
   const isMobile = useIsMobileLayout();
   const { currentFilter, setCurrentFilter } = useAppContext();
-  const { expenses: storeExpenses, loading, totalExpenses } = useAppSelector((state) => state.expenses);
+  const { expenses: storeExpenses, loading, error, totalExpenses } = useAppSelector((state) => state.expenses);
   const { groups: storeGroups } = useAppSelector((state) => state.groups);
   const [tabValue, setTabValue] = useState(0);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -203,7 +204,16 @@ const Expenses: React.FC = () => {
     );
   }
 
+  if (loading && !storeExpenses?.length) {
+    return <LcLoadingState label="Loading your expenses..." />;
+  }
+
+  if (error && !storeExpenses?.length) {
+    return <LcErrorState message={error} onRetry={handleRefresh} />;
+  }
+
   return (
+    <PageTransition>
     <Box sx={{ width: '100%', minWidth: 0 }}>
       <Snackbar
         open={!!successMessage}
@@ -339,25 +349,24 @@ const Expenses: React.FC = () => {
 
       {/* Empty State for no expenses */}
       {(!storeExpenses || storeExpenses.length === 0) && !loading && (
-        <Paper sx={{ p: 6, textAlign: 'center' }}>
-          <Typography variant="h6" color="text.secondary" gutterBottom>
-            No expenses yet
-          </Typography>
-          <Typography variant="body2" color="text.secondary" mb={3}>
-            Start tracking your expenses by adding your first one
-          </Typography>
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            onClick={handleAddExpense}
-            size="large"
-          >
-            Add Your First Expense
-          </Button>
-        </Paper>
+        <LcEmptyState
+          title="No expenses yet"
+          description="Start tracking your expenses by adding your first one"
+          action={(
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={handleAddExpense}
+              size="large"
+            >
+              Add Your First Expense
+            </Button>
+          )}
+        />
       )}
 
     </Box>
+    </PageTransition>
   );
 };
 
